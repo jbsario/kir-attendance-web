@@ -1,6 +1,6 @@
 // KIR Attendance service worker — lets the app open with no internet.
 // Data sync is handled in the page (IndexedDB outbox); Supabase API calls are never cached here.
-const V = 'kir-att-v4';
+const V = 'kir-att-v5';
 const SHELL = [
   './', './index.html', './config.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
@@ -35,6 +35,15 @@ self.addEventListener('fetch', e => {
       const net = fetch(r).then(res => { if (res.ok) c.put(r, res.clone()); return res; }).catch(() => hit);
       return hit || net;
     }));
+    return;
+  }
+
+  // config.js: network first so new Supabase settings apply immediately
+  if (u.origin === self.location.origin && u.pathname.endsWith('/config.js')) {
+    e.respondWith(
+      fetch(r).then(res => { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); return res; })
+        .catch(() => caches.match(r))
+    );
     return;
   }
 
