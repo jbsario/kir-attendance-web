@@ -1550,7 +1550,9 @@ $('#g-setup').onsubmit=e=>{e.preventDefault();try{localStorage.setItem('kir_sb_u
 $('#g-demo').onclick=()=>{try{localStorage.setItem('kir_demo','1')}catch(_){}DB=null;banner('Demo mode: data is saved on this device only.');startApp(null)};
 $('#c-signout').onclick=async()=>{try{localStorage.removeItem('kir_demo')}catch(_){}if(SB)await SB.auth.signOut();location.reload()};
 (async()=>{
-  const C=window.KIR_CONFIG||{};let url=C.SUPABASE_URL,key=C.SUPABASE_ANON_KEY,demo=null;
+  // Built-in project settings: every device connects automatically, even if config.js is missing or an old cached copy.
+  const BUILTIN={SUPABASE_URL:'https://uezvrlxbfgouqgigcilj.supabase.co',SUPABASE_ANON_KEY:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlenZybHhiZmdvdXFnaWdjaWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNzc1NjYsImV4cCI6MjA5ODc1MzU2Nn0.K8cr1zHMSFWd9nLhScSZ4ehSvtJsDDDPFzjRXgmnJoo'};
+  const C=window.KIR_CONFIG||{};let url=C.SUPABASE_URL||BUILTIN.SUPABASE_URL,key=C.SUPABASE_ANON_KEY||BUILTIN.SUPABASE_ANON_KEY,demo=null;
   try{url=url||localStorage.getItem('kir_sb_url');key=key||localStorage.getItem('kir_sb_key');demo=localStorage.getItem('kir_demo')}catch(_){}
   if(demo){banner('Demo mode: data is saved on this device only.');startApp(null);return}
   if(url&&key&&!window.supabase){gate('error',navigator.onLine?'Could not load the database library. Check your internet, then reload.':'No internet. Connect once to load the app on this device.');return}
