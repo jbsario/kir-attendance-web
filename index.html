@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KIR Attendance</title>
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KIR Attendance">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#14171c;--mute:#6b7280;--line:#e5e7eb;
+  --brand:#0f766e;--brand2:#14b8a6;--in:#16a34a;--out:#2563eb;--late:#d97706;--abs:#dc2626;
+  --r:16px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0d1014;--card:#161a20;--ink:#eef1f5;--mute:#8b94a3;--line:#262c35}
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(80px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.mono{font-family:"JetBrains Mono",monospace}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+header h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
+header h1 span{color:var(--brand)}
+#clock{text-align:right}
+#clock .t{font-size:20px;font-weight:700}
+#clock .d{font-size:11px;color:var(--mute)}
+main{max-width:900px;margin:0 auto;padding:14px}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;color:var(--mute);padding:9px 0 10px;font:600 11px Inter;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+nav button svg{width:22px;height:22px}
+nav button.on{color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:560px){.g4{grid-template-columns:repeat(2,1fr)}}
+.stat .n{font-size:28px;font-weight:800;letter-spacing:-.03em}
+.stat .l{font-size:11px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.stat .bar{height:5px;border-radius:9px;background:var(--line);margin-top:8px;overflow:hidden}
+.stat .bar i{display:block;height:100%;border-radius:9px}
+h2{font-size:15px;font-weight:700;margin:18px 2px 10px;display:flex;justify-content:space-between;align-items:center}
+h2 small{font-weight:500;color:var(--mute);font-size:12px}
+.emps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.emp{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 12px;text-align:center;cursor:pointer;transition:transform .1s}
+.emp:active{transform:scale(.97)}
+.av{width:56px;height:56px;border-radius:50%;margin:0 auto 8px;display:grid;place-items:center;font-weight:800;font-size:20px;color:#fff;background:var(--brand);overflow:hidden;object-fit:cover}
+.emp .nm{font-weight:700;font-size:14px;line-height:1.2}
+.emp .ps{font-size:11px;color:var(--mute);margin-top:2px}
+.pill{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
+.p-in{background:#dcfce7;color:#166534}.p-out{background:#dbeafe;color:#1e40af}.p-abs{background:#f3f4f6;color:#6b7280}.p-late{background:#fef3c7;color:#92400e}
+@media (prefers-color-scheme:dark){.p-in{background:#14532d;color:#bbf7d0}.p-out{background:#1e3a8a;color:#bfdbfe}.p-abs{background:#262c35;color:#9ca3af}.p-late{background:#78350f;color:#fde68a}}
+.row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .av{width:40px;height:40px;font-size:15px;margin:0;flex:none}
+.row .main{flex:1;min-width:0}
+.row .main b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .main span{font-size:12px;color:var(--mute)}
+.row .r{text-align:right;font-size:12px}
+.row .r b{font-size:15px}
+.thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;border:1px solid var(--line);cursor:zoom-in}
+.btn{border:0;border-radius:12px;padding:12px 16px;font:700 14px Inter;cursor:pointer;background:var(--brand);color:#fff}
+.btn.sec{background:var(--line);color:var(--ink)}
+.btn.red{background:var(--abs)}
+.btn.blue{background:var(--out)}
+.btn.green{background:var(--in)}
+.btn.sm{padding:8px 12px;font-size:12px;border-radius:10px}
+.btn:disabled{opacity:.4}
+.btn.block{width:100%}
+label{display:block;font-size:12px;font-weight:600;color:var(--mute);margin:10px 0 5px}
+input,select{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:11px 12px;font:500 15px Inter}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.sheet{background:var(--card);width:100%;max-width:460px;border-radius:22px 22px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+@media(min-width:600px){.modal{align-items:center}.sheet{border-radius:22px}}
+.sheet h3{font-size:18px;font-weight:800;margin-bottom:4px}
+.dots{display:flex;justify-content:center;gap:12px;margin:14px 0}
+.dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--mute)}
+.dots i.f{background:var(--brand);border-color:var(--brand)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:14px;padding:15px 0;font:700 22px Inter;cursor:pointer}
+.pad button:active{background:var(--line)}
+.snap{display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--line);border-radius:14px;padding:14px;cursor:pointer;margin:12px 0;font-weight:600;color:var(--mute);font-size:14px}
+.snap img{width:72px;height:72px;border-radius:12px;object-fit:cover}
+.toast{position:fixed;left:50%;top:18px;transform:translateX(-50%) translateY(-120px);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:600;font-size:14px;z-index:40;transition:transform .25s;max-width:90vw;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.banner{background:#fef3c7;color:#92400e;border-radius:12px;padding:10px 12px;font-size:12px;margin-bottom:12px;display:none}
+.banner.show{display:block}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;color:var(--mute);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:9px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl tr.click{cursor:pointer}
+.scroll{overflow-x:auto}
+.hbar{height:8px;border-radius:9px;background:var(--line);min-width:60px}
+.hbar i{display:block;height:100%;border-radius:9px;background:var(--brand2)}
+.flex{display:flex;gap:8px;align-items:center}
+.sp{justify-content:space-between}
+.empty{text-align:center;color:var(--mute);padding:30px 10px;font-size:14px}
+.big{font-size:42px;font-weight:800;letter-spacing:-.03em}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--mute);flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+#lightbox img{max-width:92vw;max-height:80vh;border-radius:14px}
+.hidden{display:none!important}
+.cam{position:relative;border-radius:14px;overflow:hidden;background:#000;margin:12px 0;height:230px}
+.cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.camtag{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:99px}
+.camtag::first-letter{color:#ef4444}
+.kcam{height:150px;margin:0 0 10px}
+.flash{animation:camflash .45s}@keyframes camflash{0%{filter:brightness(2.6)}100%{filter:none}}
+.thumbs{display:flex;gap:3px;justify-content:center;margin-top:3px}.thumbs img{width:22px;height:22px;border-radius:5px;object-fit:cover}
+.supbar{display:flex;align-items:center;gap:10px;border-radius:14px;padding:11px 12px;margin-bottom:10px;font-size:13px}
+.supbar>div{flex:1;min-width:0}.supbar small{font-size:11px;opacity:.85}
+.supbar.on{background:#ccfbf1;color:#134e4a;border:1.5px solid #14b8a6}
+.supbar.off{background:#fef3c7;color:#78350f;border:1.5px solid #f59e0b}
+@media (prefers-color-scheme:dark){.supbar.on{background:#134e4a;color:#ccfbf1}.supbar.off{background:#78350f;color:#fef3c7}}
+.emp.busy{opacity:.45;pointer-events:none}
+.undo{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px;transform:translateY(160%);opacity:0;visibility:hidden;pointer-events:none;transition:transform .25s,opacity .25s,visibility .25s;max-width:520px;margin:0 auto}
+.undo.show{transform:none;opacity:1;visibility:visible;pointer-events:auto}.undo span{flex:1}
+.undo button{border:0;background:#14b8a6;color:#fff;font:800 13px Inter;padding:9px 14px;border-radius:10px;cursor:pointer}
+.schip{border:0;border-radius:99px;padding:6px 10px;font:700 11px Inter;cursor:pointer;white-space:nowrap;margin-left:auto;margin-right:10px}
+.schip.ok{background:#dcfce7;color:#166534}.schip.off{background:#fee2e2;color:#991b1b}.schip.busy{background:#fef3c7;color:#92400e}.schip.bad{background:#fecaca;color:#7f1d1d}
+@media (prefers-color-scheme:dark){.schip.ok{background:#14532d;color:#bbf7d0}.schip.off{background:#7f1d1d;color:#fecaca}.schip.busy{background:#78350f;color:#fde68a}}
+.geo{border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px;line-height:1.45}
+.geo small{font-size:11px;opacity:.85}
+.geo.wait{background:var(--bg);color:var(--mute)}
+.geo.ok{background:#dcfce7;color:#166534}
+.geo.bad{background:#fee2e2;color:#991b1b}
+@media (prefers-color-scheme:dark){.geo.ok{background:#14532d;color:#bbf7d0}.geo.bad{background:#7f1d1d;color:#fecaca}}
+#p-map{height:150px;border-radius:12px;margin-top:8px;z-index:0}
+#gf-map{height:280px;border-radius:12px;margin-top:12px;z-index:0}
+.site{border:1.5px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;cursor:pointer}
+.site.on{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 5%,transparent)}
+.sdot{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;flex:none}
+.pulse{box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 35%,transparent)}
+.flag{color:var(--abs);font-weight:700}
+.wk{border-collapse:separate;border-spacing:0;font-size:11px;width:100%}
+.wk th,.wk td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:center;white-space:nowrap}
+.wk th{color:var(--mute);font-weight:600;background:var(--card);cursor:pointer}
+.wk th span{font-size:15px;font-weight:800;color:var(--ink)}
+.wk th.td span{color:var(--brand)}
+.wk .nm{position:sticky;left:0;z-index:2;background:var(--card);text-align:left;min-width:108px;max-width:130px;border-right:1px solid var(--line);cursor:pointer}
+.wk .nm b{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis}
+.wk .nm small{color:var(--mute);font-size:10px}
+.wk td.c{min-width:70px;cursor:pointer;line-height:1.35}
+.wk td.c div{border-radius:9px;padding:5px 3px}
+.wk .ok{background:#dcfce7;color:#166534}.wk .lt{background:#fef3c7;color:#92400e}.wk .op{background:#dbeafe;color:#1e40af}
+.wk .ab{color:var(--mute);border:1.5px dashed var(--line);font-size:16px;font-weight:700}
+.wk td.c.td{background:color-mix(in srgb,var(--brand) 6%,transparent)}
+.wk tfoot td{font-weight:700;background:var(--bg)}
+.wk .tot{font-family:"JetBrains Mono",monospace;font-size:11px}
+@media (prefers-color-scheme:dark){.wk .ok{background:#14532d;color:#bbf7d0}.wk .lt{background:#78350f;color:#fde68a}.wk .op{background:#1e3a8a;color:#bfdbfe}}
+nav button{font-size:10px}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="width:100%;max-width:380px;padding:22px">
+    <div style="text-align:center;margin-bottom:14px"><img src="icon.svg" width="56" height="56" alt="" style="border-radius:14px"><h1 style="font-size:20px;font-weight:800;margin-top:8px">KIR <span style="color:var(--brand)">Attendance</span></h1><div id="g-sub" style="font-size:12px;color:var(--mute);margin-top:2px">Loading…</div></div>
+    <form id="g-login" class="hidden">
+      <label>Email</label><input id="g-email" type="email" autocomplete="username" required>
+      <label>Password</label><input id="g-pass" type="password" autocomplete="current-password" required>
+      <button class="btn block" style="margin-top:16px" id="g-btn">Sign in</button>
+      <div style="font-size:11px;color:var(--mute);margin-top:10px;text-align:center">Accounts are created by the owner in Supabase → Authentication.</div>
+    </form>
+    <form id="g-setup" class="hidden">
+      <div style="font-size:12px;color:var(--mute);line-height:1.5">Connect your Supabase project (Settings → API). Saved on this device only — or put them in <b>config.js</b> for all devices.</div>
+      <label>Project URL</label><input id="g-url" placeholder="https://xxxx.supabase.co" required>
+      <label>Anon public key</label><input id="g-key" placeholder="eyJhbGciOi…" required>
+      <button class="btn block" style="margin-top:16px">Connect</button>
+      <button type="button" class="btn sec block" style="margin-top:8px" id="g-demo">Try demo (this device only)</button>
+    </form>
+  </div>
+</div>
+<header>
+  <h1>KIR <span>Attendance</span></h1>
+  <button id="sync-chip" class="schip hidden"></button>
+  <div id="clock"><div class="t mono" id="ck-t">--:--</div><div class="d" id="ck-d"></div></div>
+</header>
+
+<main>
+  <div class="banner" id="banner"></div>
+
+  <!-- KIOSK -->
+  <section id="v-kiosk">
+    <div id="sup-bar" class="supbar hidden"></div>
+    <div id="k-cam" class="cam kcam hidden"><video id="k-video" playsinline muted autoplay></video><span class="camtag" id="k-camtag"></span></div>
+    <div class="card" style="text-align:center;padding:18px">
+      <div style="font-size:13px;color:var(--mute);font-weight:600" id="k-head">TAP YOUR NAME TO TIME IN / OUT</div>
+      <div class="grid g4" style="margin-top:12px" id="k-stats"></div>
+      <button class="btn sm sec" style="margin-top:12px" data-manual>✍ Manual attendance (admin)</button>
+    </div>
+    <h2>Crew <small id="k-count"></small></h2>
+    <input id="k-search" placeholder="Search name…" style="margin-bottom:10px">
+    <div class="emps" id="k-list"></div>
+  </section>
+
+  <!-- TODAY -->
+  <section id="v-today" class="hidden">
+    <div class="flex sp"><h2 style="margin-top:4px">Daily Board</h2><input type="date" id="t-date" style="width:auto"></div>
+    <div class="grid g4" id="t-stats"></div>
+    <div class="card" style="margin-top:12px">
+      <div class="flex sp" style="margin-bottom:6px"><b style="font-size:13px">Timeline</b>
+        <div class="legend"><span><i style="background:var(--in)"></i>On time</span><span><i style="background:var(--late)"></i>Late</span><span><i style="background:var(--out)"></i>Open</span></div></div>
+      <div id="t-timeline"></div>
+    </div>
+    <h2>Crew status</h2>
+    <div class="card" id="t-list"></div>
+  </section>
+
+  <!-- WEEK GRID -->
+  <section id="v-week" class="hidden">
+    <div class="flex sp" style="margin:4px 0 12px">
+      <button class="btn sm sec" id="w-prev">‹ Prev</button>
+      <div style="text-align:center"><b id="w-title" style="font-size:15px"></b><div id="w-sub" style="font-size:11px;color:var(--mute)"></div></div>
+      <button class="btn sm sec" id="w-next">Next ›</button>
+    </div>
+    <div class="grid g4" id="w-stats"></div>
+    <div class="flex sp" style="margin:16px 2px 8px">
+      <b style="font-size:15px">Daily attendance</b>
+      <div class="flex"><button class="btn sm sec" id="w-pay">Payroll ›</button><button class="btn sm sec" id="w-add">+ Worker</button><button class="btn sm" data-manual>✍ Manual</button></div>
+    </div>
+    <div class="legend" style="margin:0 2px 8px"><span><i style="background:#22c55e"></i>On time</span><span><i style="background:#f59e0b"></i>Late</span><span><i style="background:#3b82f6"></i>No time-out</span><span><i style="border:1.5px dashed var(--mute)"></i>Absent / blank</span></div>
+    <div class="card scroll" style="padding:0"><table class="wk" id="w-grid"></table></div>
+    <div style="font-size:11px;color:var(--mute);margin:8px 2px;line-height:1.6">• Tap a <b>cell</b> to add, edit or delete that day's record<br>• Tap a <b>day header</b> to mark every blank worker present for the full shift<br>• Tap a <b>name</b> to edit or delete the worker</div>
+  </section>
+
+  <!-- REPORTS -->
+  <section id="v-reports" class="hidden">
+    <h2 style="margin-top:4px">Payroll Report</h2>
+    <div class="card">
+      <div class="grid g2">
+        <div><label>From</label><input type="date" id="r-from"></div>
+        <div><label>To</label><input type="date" id="r-to"></div>
+      </div>
+      <div class="flex" style="margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm sec" data-rq="week">Sat–Fri week</button>
+        <button class="btn sm sec" data-rq="lastweek">Last Sat–Fri</button>
+        <button class="btn sm sec" data-rq="cut1">1–15</button>
+        <button class="btn sm sec" data-rq="cut2">16–end</button>
+        <button class="btn sm sec" data-rq="month">This month</button>
+      </div>
+    </div>
+    <div class="grid g4" id="r-stats" style="margin-top:12px"></div>
+    <h2>Summary per worker <small>tap row for details</small></h2>
+    <div class="card scroll"><table class="tbl" id="r-sum"></table></div>
+    <h2>Daily records <small>tap to edit</small></h2>
+    <div class="card scroll"><table class="tbl" id="r-det"></table></div>
+    <div class="grid g2" style="margin-top:12px">
+      <button class="btn" id="r-csv">⬇ Download CSV</button>
+      <button class="btn sec" id="r-copy">Copy as text</button>
+    </div>
+  </section>
+
+  <!-- LOGS -->
+  <section id="v-logs" class="hidden">
+    <div class="flex sp" style="margin:4px 2px 10px"><b style="font-size:15px">Activity Logs</b><div class="flex"><button class="btn sm sec" id="l-refresh">↻</button><button class="btn sm" data-manual>✍ Manual</button></div></div>
+    <div class="card">
+      <div class="grid g2">
+        <div><label>From</label><input type="date" id="l-from"></div>
+        <div><label>To</label><input type="date" id="l-to"></div>
+        <div><label>Type</label><select id="l-type">
+          <option value="">All activity</option><option value="kiosk">Kiosk time in/out</option><option value="manual">Manual entries</option><option value="edit">Edits & bulk fill</option><option value="delete">Deletes</option><option value="admin">Workers & settings</option><option value="outside">🚩 Outside geofence</option></select></div>
+        <div><label>Worker</label><select id="l-emp"><option value="">All workers</option></select></div>
+      </div>
+      <input id="l-q" placeholder="Search name, reason, entered by…" style="margin-top:10px">
+    </div>
+    <div class="grid g4" id="l-stats" style="margin-top:12px"></div>
+    <div id="l-list" style="margin-top:12px"></div>
+    <div class="grid g2" style="margin-top:12px">
+      <button class="btn" id="l-csv">⬇ Download logs CSV</button>
+      <button class="btn sec" id="l-copy">Copy as text</button>
+    </div>
+  </section>
+
+  <!-- STAFF -->
+  <section id="v-staff" class="hidden">
+    <div class="flex sp"><h2 style="margin-top:4px">Workers</h2><button class="btn sm" id="s-add">+ Add worker</button></div>
+    <div class="card" id="s-list"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="v-settings" class="hidden">
+    <h2 style="margin-top:4px">Shift & Pay Rules</h2>
+    <div class="card">
+      <div class="grid g2">
+        <div><label>Shift start</label><input type="time" id="c-start"></div>
+        <div><label>Shift end</label><input type="time" id="c-end"></div>
+        <div><label>Grace period (min)</label><input type="number" id="c-grace" min="0"></div>
+        <div><label>Unpaid lunch (min)</label><input type="number" id="c-lunch" min="0"></div>
+        <div><label>Regular hours / day</label><input type="number" id="c-reg" min="1" step="0.5"></div>
+        <div><label>OT multiplier</label><input type="number" id="c-ot" min="1" step="0.05"></div>
+        <div><label>Snapshot on time in/out</label><select id="c-photo"><option value="1">On — auto camera photo</option><option value="0">Off</option></select></div>
+        <div style="grid-column:1/-1"><label>Time in / out method</label><select id="c-mode"><option value="pin">PIN — worker taps name + enters own PIN</option><option value="supervised">Supervised — tap name only, admin/foreman session required</option></select></div>
+        <div><label>Admin PIN</label><input id="c-admin" inputmode="numeric" maxlength="6"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--mute)" id="c-preview"></div>
+      <button class="btn block" style="margin-top:14px" id="c-save">Save settings</button>
+    </div>
+    <h2>📍 Geofence · job sites <small id="gf-sum"></small></h2>
+    <div class="card">
+      <label style="margin-top:0">Mode</label>
+      <select id="gf-mode">
+        <option value="off">Off — no location check</option>
+        <option value="warn">Flag — allow, but mark punches outside a site 🚩</option>
+        <option value="block">Strict — time in/out only inside a site</option>
+      </select>
+      <div id="gf-map"></div>
+      <div style="font-size:11px;color:var(--mute);margin-top:6px">Tap the map to move the selected site. Blue dot = you.</div>
+      <div class="grid g2" style="margin-top:10px">
+        <button class="btn sm" id="gf-here">📍 Add site here</button>
+        <button class="btn sm sec" id="gf-add">+ Add at map center</button>
+      </div>
+      <button class="btn sm sec block" style="margin-top:8px" id="gf-me">🎯 Show my location</button>
+      <div id="gf-list"></div>
+      <button class="btn block" style="margin-top:14px" id="gf-save">Save geofence</button>
+      <div style="font-size:11px;color:var(--mute);margin-top:8px;line-height:1.5">Each time in/out saves the phone's GPS location, nearest site and distance. Phone GPS is usually accurate to 5–30 m outdoors; use a radius of 80–150 m for a house or building site.</div>
+    </div>
+    <h2>📶 Offline & sync</h2>
+    <div class="card">
+      <div id="sy-box"></div>
+      <div class="grid g2" style="margin-top:12px">
+        <button class="btn sm" id="sy-now">🔄 Sync now</button>
+        <button class="btn sm sec" id="sy-pre">⬇ Save data for offline</button>
+      </div>
+      <div style="font-size:11px;color:var(--mute);margin-top:8px;line-height:1.5">No signal on site? Keep working — time in/out, selfies, GPS, manual entries and edits are saved on this phone and upload automatically when internet returns (checked every 20 s). Open the app once with internet so it can work offline after that.</div>
+    </div>
+    <div class="card" style="margin-top:12px;font-size:12px;color:var(--mute);line-height:1.6">
+      <b style="color:var(--ink)">How it works</b><br>
+      • Kiosk: worker taps name → enters 4-digit PIN → takes selfie → Time In / Time Out.<br>
+      • Late = time-in after shift start + grace. Minutes counted from shift start.<br>
+      • Hours = out − in, minus lunch if worked &gt; 5h. OT = hours beyond regular.<br>
+      • Est. pay = (regular hrs ÷ reg/day × daily rate) + OT hrs × hourly × OT multiplier.<br>
+      • Staff, Reports & Settings are locked behind the Admin PIN (default <b>1234</b>).
+    </div>
+    <button class="btn sec block" style="margin-top:12px" id="c-staff">👷 Manage workers ›</button>
+    <button class="btn sec block" style="margin-top:8px" id="c-lock">🔒 Lock admin</button>
+    <button class="btn red block" style="margin-top:8px" id="c-signout">Sign out of this device</button>
+    <div id="c-acct" style="font-size:11px;color:var(--mute);text-align:center;margin-top:8px"></div>
+  </section>
+</main>
+
+<nav id="nav">
+  <button data-v="kiosk" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Clock</button>
+  <button data-v="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Today</button>
+  <button data-v="week" data-lock><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Week</button>
+  <button data-v="reports" data-lock><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Payroll</button>
+  <button data-v="logs" data-lock><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Logs</button>
+  <button data-v="settings" data-lock><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+</nav>
+
+<!-- Punch modal -->
+<div class="modal" id="m-punch"><div class="sheet">
+  <div class="flex sp"><div><h3 id="p-name"></h3><div style="font-size:13px;color:var(--mute)" id="p-sub"></div></div><button class="btn sm sec" data-close>✕</button></div>
+  <div id="p-pinwrap">
+    <div class="dots" id="p-dots"><i></i><i></i><i></i><i></i></div>
+    <div class="pad" id="p-pad"></div>
+  </div>
+  <div id="p-step2" class="hidden">
+    <div style="text-align:center;margin-top:10px"><div class="big mono" id="p-time"></div><div style="font-size:12px;color:var(--mute)" id="p-info"></div></div>
+    <div id="p-geo" class="geo hidden"></div>
+    <div id="p-map" class="hidden"></div>
+    <div class="cam hidden" id="p-cam"><video id="p-video" playsinline muted autoplay></video><span class="camtag" id="p-camtag">● Starting camera…</span></div>
+    <label class="snap hidden" id="p-snap"><input type="file" accept="image/*" capture="user" id="p-file" hidden><span id="p-snaptxt">📷 Tap to take photo</span></label>
+    <button class="btn block" id="p-go"></button>
+  </div>
+</div></div>
+
+<!-- Admin PIN modal -->
+<div class="modal" id="m-admin"><div class="sheet">
+  <div class="flex sp"><h3>Admin PIN</h3><button class="btn sm sec" data-close>✕</button></div>
+  <div class="dots" id="a-dots"><i></i><i></i><i></i><i></i></div>
+  <div class="pad" id="a-pad"></div>
+</div></div>
+
+<!-- Worker edit modal -->
+<div class="modal" id="m-emp"><div class="sheet">
+  <div class="flex sp"><h3 id="e-title">Worker</h3><button class="btn sm sec" data-close>✕</button></div>
+  <label>Full name</label><input id="e-name">
+  <label>Position / trade</label><input id="e-pos" placeholder="e.g. Mason, Helper, CCTV Tech">
+  <div class="grid g2">
+    <div><label>Daily rate (₱)</label><input id="e-rate" type="number" inputmode="decimal"></div>
+    <div><label>4-digit PIN</label><input id="e-pin" inputmode="numeric" maxlength="4"></div>
+  </div>
+  <label>Status</label><select id="e-active"><option value="1">Active</option><option value="0">Inactive</option></select>
+  <div class="grid g2" style="margin-top:16px">
+    <button class="btn red sec" id="e-del">Delete</button>
+    <button class="btn" id="e-save">Save</button>
+  </div>
+</div></div>
+
+<!-- Record edit modal -->
+<div class="modal" id="m-rec"><div class="sheet">
+  <div class="flex sp"><div><h3 id="rc-name"></h3><div style="font-size:13px;color:var(--mute)" id="rc-date"></div></div><button class="btn sm sec" data-close>✕</button></div>
+  <div class="grid g2">
+    <div><label>Time in</label><input type="time" id="rc-in"></div>
+    <div><label>Time out</label><input type="time" id="rc-out"></div>
+  </div>
+  <label>Reason / note <span style="color:var(--abs)">*</span></label><input id="rc-note" placeholder="e.g. Forgot to clock out" list="reasons">
+  <label>Entered by <span style="color:var(--abs)">*</span></label><input id="rc-by" placeholder="Your name">
+  <div id="rc-geo" style="margin-top:10px"></div>
+  <div class="flex" style="margin-top:12px;gap:10px" id="rc-photos"></div>
+  <div id="rc-hist" style="margin-top:12px"></div>
+  <div class="grid g2" style="margin-top:16px">
+    <button class="btn red" id="rc-del">Delete record</button>
+    <button class="btn" id="rc-save">Save</button>
+  </div>
+</div></div>
+
+<!-- Manual attendance -->
+<div class="modal" id="m-manual"><div class="sheet">
+  <div class="flex sp"><div><h3>✍ Manual attendance</h3><div style="font-size:12px;color:var(--mute)">Every entry is saved to the activity log</div></div><button class="btn sm sec" data-close>✕</button></div>
+  <label>Type</label>
+  <div class="grid g2" id="mn-type">
+    <button class="btn sm" data-t="full">In & Out</button>
+    <button class="btn sm sec" data-t="in">Time in only</button>
+    <button class="btn sm sec" data-t="out">Time out only</button>
+    <button class="btn sm sec" data-t="absent">Mark absent</button>
+  </div>
+  <div class="grid g2">
+    <div><label>Date</label><input type="date" id="mn-date"></div>
+    <div id="mn-inw"><label>Time in</label><input type="time" id="mn-in"></div>
+    <div id="mn-outw"><label>Time out</label><input type="time" id="mn-out"></div>
+  </div>
+  <div class="flex sp"><label>Workers <span id="mn-cnt" style="color:var(--brand)"></span></label><button class="btn sm sec" id="mn-all" style="margin-top:6px">Select all</button></div>
+  <div id="mn-emps" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow:auto"></div>
+  <label>Reason <span style="color:var(--abs)">*</span></label>
+  <input id="mn-reason" list="reasons" placeholder="Pick or type a reason">
+  <datalist id="reasons"><option>Forgot to time in</option><option>Forgot to time out</option><option>Phone / kiosk unavailable</option><option>Off-site work</option><option>Rain / work suspended</option><option>Half day</option><option>Correction</option><option>Absent</option></datalist>
+  <label>Entered by <span style="color:var(--abs)">*</span></label><input id="mn-by" placeholder="Your name">
+  <div id="mn-preview" style="font-size:12px;color:var(--mute);margin-top:10px"></div>
+  <button class="btn block" style="margin-top:12px" id="mn-save">Save manual attendance</button>
+</div></div>
+<style>.chip{border:1.5px solid var(--line);border-radius:99px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;background:var(--bg)}.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.lg{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.lg:last-child{border-bottom:0}.lg .tm{width:52px;flex:none;color:var(--mute);font-family:"JetBrains Mono",monospace;font-size:11px;padding-top:2px}.lg .bd{flex:1;min-width:0}.lg .ac{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;margin-right:4px;color:#fff;letter-spacing:.03em}.lg .dt{color:var(--mute);margin-top:3px;line-height:1.45}</style>
+
+<!-- Manual add record -->
+<div class="modal" id="lightbox" style="align-items:center"><img id="lb-img" alt=""></div>
+
+<div class="modal" id="m-sup"><div class="sheet">
+  <div class="flex sp"><div><h3>👁 Start supervised session</h3><div style="font-size:12px;color:var(--mute)">Workers tap their name — no PIN. Every punch is stamped with your name.</div></div><button class="btn sm sec" data-close>✕</button></div>
+  <label>Supervisor name <span style="color:var(--abs)">*</span></label><input id="su-by" placeholder="e.g. Jade / Foreman Mario">
+  <label>Session length</label>
+  <select id="su-len"><option value="2">2 hours</option><option value="4">4 hours</option><option value="8" selected>8 hours</option><option value="eod">Until end of day</option></select>
+  <label class="flex" style="gap:8px;margin-top:14px;color:var(--ink);font-size:13px"><input type="checkbox" id="su-quick" style="width:auto"> <span><b>Quick tap</b> — one tap = instant time in/out with auto snapshot, 7-second Undo</span></label>
+  <div style="font-size:11px;color:var(--mute);margin-top:10px;line-height:1.5">Admin tabs lock while the session runs. Geofence rules still apply. Session ends automatically when time is up.</div>
+  <button class="btn block" style="margin-top:14px" id="su-start">Start session</button>
+</div></div>
+<div class="undo" id="undo"><span id="undo-msg"></span><button id="undo-btn">UNDO</button></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ helpers ============ */
+const TZ='Asia/Manila';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dkey=(d=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ}).format(d);
+const fmtT=ts=>ts?new Date(ts).toLocaleTimeString('en-PH',{timeZone:TZ,hour:'numeric',minute:'2-digit'}):'—';
+const hhmm=ts=>ts?new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(ts)):'';
+const mod=ts=>{const [h,m]=hhmm(ts).split(':').map(Number);return h*60+m};
+const toMin=s=>{const [h,m]=(s||'0:0').split(':').map(Number);return h*60+m};
+const tsFrom=(date,hm)=>hm?Date.parse(`${date}T${hm}:00+08:00`):null;
+const peso=n=>'₱'+(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const h1=n=>(Math.round(n*100)/100).toFixed(2);
+const initials=n=>(n||'?').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
+const COLORS=['#0f766e','#2563eb','#7c3aed','#db2777','#ea580c','#059669','#0891b2','#4f46e5','#b45309','#be123c'];
+const colorOf=id=>COLORS[[...String(id)].reduce((a,c)=>a+c.charCodeAt(0),0)%COLORS.length];
+const prettyDate=k=>new Date(k+'T00:00:00+08:00').toLocaleDateString('en-PH',{timeZone:TZ,weekday:'short',month:'short',day:'numeric'});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600)}
+function banner(msg){const b=$('#banner');b.textContent=msg||'';b.classList.toggle('show',!!msg)}
+
+const addDays=(k,n)=>{const d=new Date(k+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+const weekStart=k=>{const dow=new Date(k+'T00:00:00Z').getUTCDay();return addDays(k,-((dow+1)%7))}; // Saturday start
+const shortT=ts=>ts?fmtT(ts).replace(/\s?([AaPp])\.?\s?[Mm]\.?/,(m,p)=>p.toLowerCase()):'';
+const DEFAULTS={start:'08:00',end:'17:00',grace:15,lunch:60,reg:8,ot:1.25,photo:1,admin:'1234',geo:'off',sites:[],mode:'pin'};
+
+/* ============ storage layer (Claude db, local fallback) ============ */
+const Local={
+  key:'kir_att_v1', mem:null, subs:[],
+  load(){if(this.mem)return this.mem;try{this.mem=JSON.parse(localStorage.getItem(this.key))}catch(e){}this.mem=this.mem||{emp:{},att:{},cfg:null};return this.mem},
+  save(){try{localStorage.setItem(this.key,JSON.stringify(this.mem))}catch(e){}this.subs.forEach(f=>f())},
+};
+let DB=null;
+const S={
+  async setEmp(id,d){if(DB)return DB.collection('employees').doc(id).set(d);Local.load().emp[id]=d;Local.save()},
+  async delEmp(id){if(DB)return DB.collection('employees').doc(id).delete();delete Local.load().emp[id];Local.save()},
+  async setAtt(id,d){if(DB)return DB.collection('att').doc(id).set(d);Local.load().att[id]=d;Local.save()},
+  async delAtt(id){if(DB)return DB.collection('att').doc(id).delete();delete Local.load().att[id];Local.save()},
+  async setCfg(d){if(DB)return DB.doc('config/settings').set(d);Local.load().cfg=d;Local.save()},
+  async log(d){if(DB)return DB.collection('logs').add(d);const m=Local.load();(m.logs=m.logs||[]).push(d);Local.save()},
+  async logs(a,b){
+    if(DB){const q=await DB.collection('logs').where('ts','>=',a).where('ts','<=',b).limit(1000).get();return q.docs.map(x=>x.data())}
+    return (Local.load().logs||[]).filter(l=>l.ts>=a&&l.ts<=b)
+  },
+  async recLogs(recId){
+    if(DB){const q=await DB.collection('logs').where('recId','==',recId).limit(100).get();return q.docs.map(x=>x.data())}
+    return (Local.load().logs||[]).filter(l=>l.recId===recId)
+  },
+  async range(from,to){
+    if(DB){const q=await DB.collection('att').where('date','>=',from).where('date','<=',to).get();return q.docs.map(x=>({id:x.id,...x.data()}))}
+    return Object.entries(Local.load().att).map(([id,v])=>({id,...v})).filter(r=>r.date>=from&&r.date<=to)
+  },
+};
+
+/* ============ activity log ============ */
+const ACT={ 'TIME IN':['#16a34a','kiosk'],'TIME OUT':['#2563eb','kiosk'],'MANUAL ADD':['#7c3aed','manual'],'MANUAL IN':['#7c3aed','manual'],'MANUAL OUT':['#7c3aed','manual'],
+  'MARK ABSENT':['#dc2626','manual'],'EDIT':['#d97706','edit'],'BULK FILL':['#0891b2','edit'],'DELETE':['#dc2626','delete'],
+  'WORKER ADD':['#475569','admin'],'WORKER EDIT':['#475569','admin'],'WORKER DELETE':['#dc2626','admin'],'SETTINGS':['#475569','admin'],'SUPERVISE START':['#0f766e','admin'],'SUPERVISE END':['#0f766e','admin'] };
+const pickT=r=>r?{in:r.in||null,out:r.out||null}:null;
+let ME='';try{ME=localStorage.getItem('kir_by')||''}catch(e){}
+function setMe(n){ME=n;try{localStorage.setItem('kir_by',n)}catch(e){}}
+async function logAct(a){
+  const d={ts:Date.now(),by:a.by||ME||'Admin',reason:'',detail:'',...a};
+  Object.keys(d).forEach(k=>d[k]===undefined&&delete d[k]);
+  try{await S.log(d)}catch(e){console.warn('log failed',e)}
+}
+function spanTxt(t){return t&&t.in?`${shortT(t.in)}–${t.out?shortT(t.out):'open'}`:'none'}
+function logDetail(l){
+  if(l.detail)return esc(l.detail);
+  if(l.before||l.after)return `${l.date?prettyDate(l.date)+' · ':''}${l.before?esc(spanTxt(l.before))+' → ':''}<b>${esc(spanTxt(l.after))}</b>`;
+  return l.date?prettyDate(l.date):'';
+}
+
+/* ============ state ============ */
+const st={emps:{},day:{},week:{},wkStart:weekStart(dkey()),cfg:{...DEFAULTS},view:'kiosk',admin:false,boardDate:dkey(),report:[]};
+let dayUnsub=null,wkUnsub=null;
+function pullWeek(){const end=addDays(st.wkStart,6);st.week={};Object.entries(Local.load().att).forEach(([id,v])=>{if(v.date>=st.wkStart&&v.date<=end)st.week[id]=v})}
+function subWeek(start){
+  st.wkStart=start;const end=addDays(start,6);
+  if(wkUnsub){wkUnsub();wkUnsub=null}
+  if(DB){st.week={};renderWeek();wkUnsub=DB.collection('att').where('date','>=',start).where('date','<=',end).onSnapshot(s=>{st.week={};s.docs.forEach(d=>st.week[d.id]=d.data());renderWeek()},e=>toast('Data error: '+e.message))}
+  else{pullWeek();renderWeek()}
+}
+
+function subEmployees(){
+  if(DB){
+    const tm=setTimeout(()=>banner('Can’t reach saved data yet — check your connection.'),10000);
+    DB.collection('employees').onSnapshot(s=>{if(!s.metadata.fromCache){clearTimeout(tm);banner('')}st.emps={};s.docs.forEach(d=>st.emps[d.id]=d.data());renderAll()},e=>{clearTimeout(tm);banner('Data error: '+e.message)});
+    DB.doc('config/settings').onSnapshot(s=>{st.cfg={...DEFAULTS,...(s.exists?s.data():{})};renderAll();fillSettings()});
+  }else{
+    const pull=()=>{const m=Local.load();st.emps={...m.emp};st.cfg={...DEFAULTS,...(m.cfg||{})};pullDay();pullWeek();renderAll()};
+    Local.subs.push(pull);pull();fillSettings();
+  }
+}
+function pullDay(){const m=Local.load();st.day={};Object.entries(m.att).forEach(([id,v])=>{if(v.date===st.boardDate)st.day[id]=v})}
+function subDay(date){
+  st.boardDate=date;
+  if(dayUnsub){dayUnsub();dayUnsub=null}
+  if(DB){dayUnsub=DB.collection('att').where('date','==',date).onSnapshot(s=>{st.day={};s.docs.forEach(d=>st.day[d.id]=d.data());renderAll()},e=>banner('Data error: '+e.message))}
+  else{pullDay();renderAll()}
+}
+// Kiosk always needs TODAY; board may look at another date
+let todayCache={};
+function todayRecs(){return st.boardDate===dkey()?st.day:todayCache}
+
+/* ============ calculations ============ */
+function calc(rec,emp){
+  const c=st.cfg, out={hours:0,late:0,ot:0,pay:0,open:false};
+  if(!rec||!rec.in)return out;
+  const startM=toMin(c.start);
+  const inM=mod(rec.in);
+  if(inM>startM+Number(c.grace))out.late=inM-startM;
+  if(!rec.out){out.open=true;return out}
+  let mins=(rec.out-rec.in)/60000;
+  if(mins>300)mins-=Number(c.lunch);
+  mins=Math.max(0,mins);
+  out.hours=mins/60;
+  const reg=Number(c.reg)||8;
+  out.ot=Math.max(0,out.hours-reg);
+  const rate=Number(emp?.rate)||0, hourly=rate/reg;
+  out.pay=Math.min(out.hours,reg)*hourly+out.ot*hourly*Number(c.ot||1);
+  return out;
+}
+function statusOf(rec){if(!rec||!rec.in)return'abs';return rec.out?'out':'in'}
+
+/* ============ render ============ */
+function avatar(id,e,cls='av'){return e.photo?`<img class="${cls}" src="${e.photo}" alt="">`:`<div class="${cls}" style="background:${colorOf(id)}">${esc(initials(e.name))}</div>`}
+function statTile(n,l,color,frac){return `<div class="card stat"><div class="n" style="color:${color}">${n}</div><div class="l">${l}</div>${frac!=null?`<div class="bar"><i style="width:${Math.round(Math.min(1,frac)*100)}%;background:${color}"></i></div>`:''}</div>`}
+const activeEmps=()=>Object.entries(st.emps).filter(([,e])=>e.active!==false).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+
+function dayStats(recs){
+  const act=activeEmps(), tot=act.length||0;
+  let inN=0,outN=0,late=0,hrs=0;
+  act.forEach(([id,e])=>{const r=recs[`${st.boardDate===dkey()?dkey():st.boardDate}_${id}`];const s=statusOf(r);if(s==='in')inN++;if(s==='out')outN++;const c=calc(r,e);if(c.late)late++;hrs+=c.hours});
+  return {tot,inN,outN,late,abs:tot-inN-outN,hrs};
+}
+
+function renderKiosk(){
+  const today=dkey(), recs=st.boardDate===today?st.day:todayCache;
+  const q=$('#k-search').value.trim().toLowerCase();
+  const act=activeEmps();
+  let inN=0,outN=0,late=0;
+  act.forEach(([id,e])=>{const r=recs[`${today}_${id}`];const s=statusOf(r);if(s==='in')inN++;if(s==='out')outN++;if(calc(r,e).late)late++});
+  const tot=act.length;
+  $('#k-stats').innerHTML=statTile(inN,'On site','var(--in)',tot?inN/tot:0)+statTile(outN,'Timed out','var(--out)',tot?outN/tot:0)+statTile(tot-inN-outN,'Not yet in','var(--abs)',tot?(tot-inN-outN)/tot:0)+statTile(late,'Late','var(--late)',tot?late/tot:0);
+  $('#k-count').textContent=`${tot} active`;
+  const list=act.filter(([,e])=>!q||e.name.toLowerCase().includes(q));
+  $('#k-list').innerHTML=list.length?list.map(([id,e])=>{
+    const r=recs[`${today}_${id}`], s=statusOf(r), c=calc(r,e);
+    const pill=s==='in'?`<span class="pill ${c.late?'p-late':'p-in'}">IN ${fmtT(r.in)}${c.late?' · late':''}</span>`:s==='out'?`<span class="pill p-out">OUT ${fmtT(r.out)} · ${h1(c.hours)}h</span>`:`<span class="pill p-abs">Not yet in</span>`;
+    return `<div class="emp" data-emp="${id}">${avatar(id,e)}<div class="nm">${esc(e.name)}</div><div class="ps">${esc(e.pos||'')}</div>${pill}</div>`;
+  }).join(''):`<div class="empty" style="grid-column:1/-1">${tot?'No match.':'No workers yet. Go to <b>Workers</b> (Admin PIN 1234) to add your crew.'}</div>`;
+}
+
+function renderToday(){
+  const s=dayStats(st.day);
+  $('#t-stats').innerHTML=statTile(s.inN+s.outN+'<span style="font-size:15px;color:var(--mute)">/'+s.tot+'</span>','Present','var(--in)',s.tot?(s.inN+s.outN)/s.tot:0)+statTile(s.abs,'Absent','var(--abs)',s.tot?s.abs/s.tot:0)+statTile(s.late,'Late','var(--late)',s.tot?s.late/s.tot:0)+statTile(h1(s.hrs),'Man-hours','var(--brand)',null);
+  // timeline 5:00 – 22:00
+  const T0=5*60,T1=22*60,span=T1-T0,pct=m=>Math.max(0,Math.min(100,(m-T0)/span*100));
+  const sM=toMin(st.cfg.start),eM=toMin(st.cfg.end);
+  const act=activeEmps();
+  const rows=act.map(([id,e])=>{const r=st.day[`${st.boardDate}_${id}`];if(!r||!r.in)return'';const c=calc(r,e);const a=mod(r.in);const b=r.out?mod(r.out):(st.boardDate===dkey()?mod(Date.now()):a+5);
+    const col=!r.out?'var(--out)':c.late?'var(--late)':'var(--in)';
+    return `<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><div style="width:74px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.name.split(' ')[0])}</div><div style="flex:1;position:relative;height:16px;background:var(--line);border-radius:6px"><i style="position:absolute;left:${pct(a)}%;width:${Math.max(1,pct(b)-pct(a))}%;top:0;bottom:0;background:${col};border-radius:6px;${!r.out?'opacity:.75':''}"></i></div><div class="mono" style="width:44px;text-align:right;font-size:11px">${r.out?h1(c.hours)+'h':'…'}</div></div>`}).join('');
+  const ticks=[6,8,10,12,14,16,18,20].map(h=>`<span style="position:absolute;left:${pct(h*60)}%;transform:translateX(-50%)">${h>12?h-12:h}${h>=12?'p':'a'}</span>`).join('');
+  $('#t-timeline').innerHTML=rows?`<div style="position:relative">${rows}<div style="position:absolute;top:0;bottom:0;left:calc(82px + (100% - 134px)*${pct(sM)/100});border-left:1.5px dashed var(--late);pointer-events:none"></div><div style="position:absolute;top:0;bottom:0;left:calc(82px + (100% - 134px)*${pct(eM)/100});border-left:1.5px dashed var(--mute);pointer-events:none"></div></div><div style="position:relative;height:14px;margin:4px 52px 0 82px;font-size:10px;color:var(--mute)">${ticks}</div><div style="font-size:10px;color:var(--mute);margin-top:4px">Dashed lines: shift ${st.cfg.start}–${st.cfg.end}</div>`:`<div class="empty">No time-ins for this date.</div>`;
+  $('#t-list').innerHTML=act.length?act.map(([id,e])=>{
+    const r=st.day[`${st.boardDate}_${id}`], s=statusOf(r), c=calc(r,e);
+    const ph=[r?.inPhoto,r?.outPhoto].filter(Boolean).map(p=>`<img class="thumb" src="${p}" data-lb>`).join('');
+    const right=s==='abs'?`<span class="pill p-abs" style="margin:0">Absent</span>`:`<div><b class="mono">${fmtT(r.in)} → ${r.out?fmtT(r.out):'…'}</b></div><div style="color:${c.late?'var(--late)':'var(--mute)'}">${c.late?`Late ${c.late}m · `:''}${r.out?h1(c.hours)+'h'+(c.ot?` · OT ${h1(c.ot)}h`:''):'on site'}</div>`;
+    return `<div class="row" ${st.admin&&r?`data-rec="${st.boardDate}_${id}" style="cursor:pointer"`:''}>${avatar(id,e)}<div class="main"><b>${esc(e.name)}</b><span>${esc(e.pos||'')}${r?.src==='manual'?' · ✍ manual':r?.src==='supervised'?` · 👁 ${esc(r.supBy||'')}`:r?.edited?' · 📝 edited':''}${r?.inGeo?.site?` · 📍 ${esc(r.inGeo.site)}`:''}${geoFlag(r?.inGeo)||geoFlag(r?.outGeo)?' <span class="flag">🚩 outside</span>':''}</span></div><div class="flex">${ph}</div><div class="r">${right}</div></div>`;
+  }).join(''):`<div class="empty">No workers yet.</div>`;
+}
+
+function renderStaff(){
+  const all=Object.entries(st.emps).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  $('#s-list').innerHTML=all.length?all.map(([id,e])=>`<div class="row" data-edit="${id}" style="cursor:pointer">${avatar(id,e)}<div class="main"><b>${esc(e.name)} ${e.active===false?'<span class="pill p-abs" style="margin:0 0 0 4px">inactive</span>':''}</b><span>${esc(e.pos||'—')} · PIN ••••</span></div><div class="r"><b class="mono">${peso(e.rate)}</b><div style="color:var(--mute)">per day</div></div></div>`).join(''):`<div class="empty">No workers yet. Tap <b>+ Add worker</b>.</div>`;
+}
+
+function renderAll(){
+  renderSupBar();
+  if(st.boardDate===dkey())todayCache=st.day;
+  renderKiosk();
+  if(st.view==='today')renderToday();
+  if(st.view==='staff')renderStaff();
+  if(st.view==='week')renderWeek();
+}
+
+/* ============ week grid (Sat–Fri) ============ */
+function renderWeek(){
+  if(st.view!=='week')return;
+  const today=dkey(),days=[...Array(7)].map((_,i)=>addDays(st.wkStart,i));
+  $('#w-title').textContent=`${prettyDate(days[0])} – ${prettyDate(days[6])}`;
+  const cur=weekStart(today);
+  $('#w-sub').textContent=st.wkStart===cur?'This payroll week · Sat–Fri':st.wkStart===addDays(cur,-7)?'Last payroll week · Sat–Fri':'Payroll week · Sat–Fri';
+  const emps=Object.entries(st.emps).filter(([id,e])=>e.active!==false||days.some(d=>st.week[`${d}_${id}`])).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  const T={md:0,hrs:0,ot:0,pay:0,late:0},col=days.map(()=>({n:0,h:0}));
+  const head=`<thead><tr><th class="nm">Worker</th>${days.map(d=>{const dt=new Date(d+'T00:00:00+08:00');return `<th data-fill="${d}" class="${d===today?'td':''}">${dt.toLocaleDateString('en-PH',{timeZone:TZ,weekday:'short'})}<br><span>${Number(d.slice(8))}</span></th>`}).join('')}<th>Days</th><th>Hrs</th><th>OT</th><th>Est. pay</th></tr></thead>`;
+  const body=emps.map(([id,e])=>{
+    const R={d:0,h:0,ot:0,pay:0};
+    const cells=days.map((d,i)=>{
+      const r=st.week[`${d}_${id}`],c=calc(r,e);
+      let inner;
+      if(r&&r.in){R.d++;R.h+=c.hours;R.ot+=c.ot;R.pay+=c.pay;col[i].n++;col[i].h+=c.hours;if(c.late)T.late++;
+        const cls=!r.out?'op':c.late?'lt':'ok';
+        inner=`<div class="${cls}"><b>${shortT(r.in)}</b><br>${r.out?shortT(r.out):'—'}<br><span class="mono">${r.out?h1(c.hours)+'h':'open'}</span>${r.src==='manual'?' ✍':r.src==='supervised'?' 👁':r.edited?' 📝':''}${geoFlag(r.inGeo)||geoFlag(r.outGeo)?' 🚩':''}${r.inPhoto||r.outPhoto?`<div class="thumbs">${[r.inPhoto,r.outPhoto].filter(Boolean).map(x=>`<img src="${x}" alt="">`).join('')}</div>`:''}</div>`}
+      else inner=`<div class="ab">+</div>`;
+      return `<td class="c ${d===today?'td':''}" data-cell="${d}|${id}">${inner}</td>`}).join('');
+    T.md+=R.d;T.hrs+=R.h;T.ot+=R.ot;T.pay+=R.pay;
+    return `<tr><td class="nm" data-edit="${id}"><b>${esc(e.name)}</b><small>${esc(e.pos||'')} · ${peso(e.rate).replace('.00','')}/d</small></td>${cells}<td class="tot">${R.d}</td><td class="tot">${h1(R.h)}</td><td class="tot">${R.ot?h1(R.ot):'—'}</td><td class="tot"><b>${peso(R.pay)}</b></td></tr>`}).join('');
+  const foot=emps.length?`<tfoot><tr><td class="nm">Present / hrs</td>${col.map(c=>`<td class="tot">${c.n}/${emps.length}<br><span style="font-weight:500;color:var(--mute)">${h1(c.h)}h</span></td>`).join('')}<td class="tot">${T.md}</td><td class="tot">${h1(T.hrs)}</td><td class="tot">${h1(T.ot)}</td><td class="tot">${peso(T.pay)}</td></tr></tfoot>`:'';
+  $('#w-grid').innerHTML=head+`<tbody>${body||`<tr><td colspan="12" class="empty">No workers yet — tap <b>+ Worker</b>.</td></tr>`}</tbody>`+foot;
+  const possible=emps.length*7;
+  $('#w-stats').innerHTML=statTile(T.md+`<span style="font-size:15px;color:var(--mute)">/${possible}</span>`,'Man-days','var(--in)',possible?T.md/possible:0)+statTile(h1(T.hrs),'Total hours','var(--brand)',null)+statTile(h1(T.ot),'OT hours','var(--out)',null)+statTile(peso(T.pay).replace(/\.\d\d$/,''),'Est. payroll','var(--late)',null);
+}
+let fillArm={};
+async function fillDay(date){
+  const blanks=activeEmps().filter(([id])=>!st.week[`${date}_${id}`]);
+  if(!blanks.length)return toast('No blanks on '+prettyDate(date));
+  if(fillArm.d!==date||Date.now()-fillArm.t>3500){fillArm={d:date,t:Date.now()};return toast(`Tap again: mark ${blanks.length} blank worker(s) present ${st.cfg.start}–${st.cfg.end} on ${prettyDate(date)}`)}
+  fillArm={};
+  try{for(const [id,e] of blanks){const k=`${date}_${id}`,nr={empId:id,name:e.name,date,in:tsFrom(date,st.cfg.start),out:tsFrom(date,st.cfg.end),inPhoto:null,outPhoto:null,note:'Bulk fill (full shift)',edited:true,src:'manual',by:ME||'Admin'};
+    await S.setAtt(k,nr);await logAct({action:'BULK FILL',recId:k,empId:id,empName:e.name,date,after:pickT(nr),reason:'Full shift, day header fill'})}
+    toast(`✅ Filled ${blanks.length} record(s)`)}catch(e){toast('Save failed: '+(e.message||e.code))}
+}
+$('#w-grid').onclick=e=>{
+  const c=e.target.closest('[data-cell]');if(c){const [d,id]=c.dataset.cell.split('|');const k=`${d}_${id}`;openRec(k,st.week[k]||null,id,d);return}
+  const n=e.target.closest('[data-edit]');if(n){openEmp(n.dataset.edit);return}
+  const f=e.target.closest('[data-fill]');if(f)fillDay(f.dataset.fill);
+};
+$('#w-prev').onclick=()=>subWeek(addDays(st.wkStart,-7));
+$('#w-next').onclick=()=>subWeek(addDays(st.wkStart,7));
+$('#w-add').onclick=()=>openEmp(null);
+$('#w-pay').onclick=()=>{$('#r-from').value=st.wkStart;$('#r-to').value=addDays(st.wkStart,6);go('reports')};
+
+/* ============ reports ============ */
+async function runReport(){
+  const from=$('#r-from').value,to=$('#r-to').value;if(!from||!to)return;
+  try{st.report=(await S.range(from,to)).sort((a,b)=>a.date.localeCompare(b.date)||(a.name||'').localeCompare(b.name||''))}catch(e){toast('Report error: '+e.message);return}
+  const by={};let T={days:0,hrs:0,ot:0,pay:0,late:0};
+  st.report.forEach(r=>{const e=st.emps[r.empId]||{name:r.name,rate:0};const c=calc(r,e);r._c=c;
+    const b=by[r.empId]||(by[r.empId]={name:e.name||r.name,pos:e.pos||'',rate:e.rate||0,days:0,hrs:0,ot:0,pay:0,late:0,lateN:0});
+    if(r.in)b.days++;b.hrs+=c.hours;b.ot+=c.ot;b.pay+=c.pay;b.late+=c.late;if(c.late)b.lateN++;
+    T.days+=r.in?1:0;T.hrs+=c.hours;T.ot+=c.ot;T.pay+=c.pay;T.late+=c.late});
+  st.reportSum=by;
+  $('#r-stats').innerHTML=statTile(T.days,'Man-days','var(--brand)',null)+statTile(h1(T.hrs),'Total hours','var(--in)',null)+statTile(h1(T.ot),'OT hours','var(--out)',null)+statTile(peso(T.pay).replace('.00',''),'Est. payroll','var(--late)',null);
+  const maxH=Math.max(1,...Object.values(by).map(b=>b.hrs));
+  const rows=Object.entries(by).sort((a,b)=>b[1].hrs-a[1].hrs);
+  $('#r-sum').innerHTML=`<tr><th>Worker</th><th>Days</th><th>Hours</th><th></th><th>OT</th><th>Late</th><th>Rate</th><th>Est. pay</th></tr>`+(rows.length?rows.map(([id,b])=>`<tr><td><b>${esc(b.name)}</b><br><span style="color:var(--mute)">${esc(b.pos)}</span></td><td class="mono">${b.days}</td><td class="mono">${h1(b.hrs)}</td><td><div class="hbar"><i style="width:${b.hrs/maxH*100}%"></i></div></td><td class="mono">${h1(b.ot)}</td><td class="mono" style="color:${b.lateN?'var(--late)':''}">${b.lateN}× / ${b.late}m</td><td class="mono">${peso(b.rate)}</td><td class="mono"><b>${peso(b.pay)}</b></td></tr>`).join('')+`<tr><td><b>TOTAL</b></td><td class="mono"><b>${T.days}</b></td><td class="mono"><b>${h1(T.hrs)}</b></td><td></td><td class="mono"><b>${h1(T.ot)}</b></td><td class="mono">${T.late}m</td><td></td><td class="mono"><b>${peso(T.pay)}</b></td></tr>`:`<tr><td colspan="8" class="empty">No records in this range.</td></tr>`);
+  $('#r-det').innerHTML=`<tr><th>Date</th><th>Worker</th><th>In</th><th>Out</th><th>Hours</th><th>Late</th><th>OT</th><th>Note</th></tr>`+(st.report.length?st.report.map(r=>`<tr class="click" data-rec="${r.id}"><td>${prettyDate(r.date)}</td><td>${esc(st.emps[r.empId]?.name||r.name)}</td><td class="mono">${fmtT(r.in)}</td><td class="mono">${r.out?fmtT(r.out):'<span style="color:var(--abs)">no out</span>'}</td><td class="mono">${h1(r._c.hours)}</td><td class="mono" style="color:${r._c.late?'var(--late)':''}">${r._c.late?r._c.late+'m':'—'}</td><td class="mono">${r._c.ot?h1(r._c.ot):'—'}</td><td style="color:var(--mute)">${r.src==='manual'?'✍ ':r.edited?'📝 ':''}${esc(r.note||'')}</td></tr>`).join(''):`<tr><td colspan="8" class="empty">—</td></tr>`);
+}
+function reportCSV(){
+  const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const L=[['SUMMARY',$('#r-from').value+' to '+$('#r-to').value],[],['Worker','Position','Days','Hours','OT Hours','Late Count','Late Minutes','Daily Rate','Est. Pay']];
+  Object.values(st.reportSum||{}).forEach(b=>L.push([b.name,b.pos,b.days,h1(b.hrs),h1(b.ot),b.lateN,b.late,b.rate,b.pay.toFixed(2)]));
+  L.push([],['DAILY RECORDS'],['Date','Worker','Time In','Time Out','Hours','Late Min','OT Hours','Est. Pay','Source','Entered by','Note','In Site','In Dist m','Out Site','Out Dist m','Geofence']);
+  st.report.forEach(r=>L.push([r.date,st.emps[r.empId]?.name||r.name,fmtT(r.in),r.out?fmtT(r.out):'',h1(r._c.hours),r._c.late,h1(r._c.ot),r._c.pay.toFixed(2),r.src==='manual'?'Manual':r.src==='supervised'?`Supervised (${r.supBy||''})`:r.edited?'Kiosk (edited)':'Kiosk',r.by||r.supBy||'',r.note||'',r.inGeo?.site||'',r.inGeo?.dist??'',r.outGeo?.site||'',r.outGeo?.dist??'',geoFlag(r.inGeo)||geoFlag(r.outGeo)?'OUTSIDE':(r.inGeo||r.outGeo?'ok':'')]));
+  return L.map(r=>r.map(q).join(',')).join('\n');
+}
+function reportText(){
+  let t=`ATTENDANCE ${$('#r-from').value} – ${$('#r-to').value}\n`;
+  Object.values(st.reportSum||{}).sort((a,b)=>a.name.localeCompare(b.name)).forEach(b=>{t+=`\n${b.name}: ${b.days}d · ${h1(b.hrs)}h · OT ${h1(b.ot)}h · late ${b.lateN}× · ${peso(b.pay)}`});
+  const tot=Object.values(st.reportSum||{}).reduce((a,b)=>a+b.pay,0);
+  return t+`\n\nTOTAL EST. PAYROLL: ${peso(tot)}`;
+}
+function setRange(k){
+  const today=dkey(),[y,m,d]=today.split('-').map(Number);const pad=n=>String(n).padStart(2,'0');
+  const last=new Date(y,m,0).getDate();let f,t;
+  if(k==='week'){f=weekStart(today);t=addDays(f,6)}
+  if(k==='lastweek'){f=addDays(weekStart(today),-7);t=addDays(f,6)}
+  if(k==='cut1'){f=`${y}-${pad(m)}-01`;t=`${y}-${pad(m)}-15`}
+  if(k==='cut2'){f=`${y}-${pad(m)}-16`;t=`${y}-${pad(m)}-${last}`}
+  if(k==='month'){f=`${y}-${pad(m)}-01`;t=`${y}-${pad(m)}-${last}`}
+  $('#r-from').value=f;$('#r-to').value=t;runReport();
+}
+
+/* ============ views & nav ============ */
+let pendingView=null;
+function go(v){
+  const btn=$(`nav button[data-v="${v}"]`);
+  if((!btn||btn.hasAttribute('data-lock'))&&!st.admin){pendingView=v;pendingManual=false;openAdmin();return}
+  st.view=v;
+  setTimeout(kcamSync,0);
+  if(v==='logs')setTimeout(initLogs);$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  $$('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));
+  if(v==='today'){$('#t-date').value=st.boardDate;renderToday()}
+  if(v==='kiosk'&&st.boardDate!==dkey())subDay(dkey());
+  if(v==='staff')renderStaff();
+  if(v==='week')subWeek(st.wkStart);
+  if(v==='reports'){if(!$('#r-from').value)setRange('week');else runReport()}
+  if(v==='settings'){fillSettings();setTimeout(()=>gfMap(true),80)}
+  window.scrollTo(0,0);
+}
+$('#nav').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.v)};
+$$('[data-close]').forEach(b=>b.onclick=()=>b.closest('.modal').classList.remove('show'));
+$$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+document.addEventListener('click',e=>{const i=e.target.closest('[data-lb]');if(i){e.stopPropagation();$('#lb-img').src=i.src;$('#lightbox').classList.add('show')}});
+
+/* ============ PIN pads ============ */
+function buildPad(el,onDigit){el.innerHTML=[1,2,3,4,5,6,7,8,9,'⌫',0,'✓'].map(k=>`<button data-k="${k}">${k}</button>`).join('');el.onclick=e=>{const b=e.target.closest('button');if(b)onDigit(b.dataset.k)}}
+function dots(el,n,len=4){el.innerHTML=Array.from({length:len},(_,i)=>`<i class="${i<n?'f':''}"></i>`).join('')}
+
+/* admin */
+let aBuf='';
+function openAdmin(){aBuf='';dots($('#a-dots'),0,String(st.cfg.admin).length);$('#m-admin').classList.add('show')}
+buildPad($('#a-pad'),k=>{
+  const need=String(st.cfg.admin).length;
+  if(k==='⌫')aBuf=aBuf.slice(0,-1);else if(k!=='✓'&&aBuf.length<need)aBuf+=k;
+  dots($('#a-dots'),aBuf.length,need);
+  if(aBuf.length===need||k==='✓'){if(aBuf===String(st.cfg.admin)){st.admin=true;$('#m-admin').classList.remove('show');toast('Admin unlocked');if(pendingSup){pendingSup=false;openSup()}else if(pendingManual){pendingManual=false;openManual()}else if(pendingView)go(pendingView)}else if(aBuf.length===need){toast('Wrong admin PIN');aBuf='';setTimeout(()=>dots($('#a-dots'),0,need),150)}}
+});
+$('#c-lock').onclick=()=>{st.admin=false;go('kiosk');toast('Admin locked')};
+
+/* punch flow */
+let P={id:null,buf:'',photo:null};
+$('#k-list').onclick=e=>{const c=e.target.closest('[data-emp]');if(c)openPunch(c.dataset.emp)};
+$('#k-search').oninput=renderKiosk;
+function openPunch(id){
+  if(st.cfg.mode==='supervised'){
+    if(!supActive()){toast('🔒 Supervisor needed — tap Start session');return}
+    if(SUP.quick)return quickPunch(id);
+  }
+  const e=st.emps[id];P={id,buf:'',photo:null,sup:st.cfg.mode==='supervised'?SUP.by:null};
+  const r=todayRecs()[`${dkey()}_${id}`],s=statusOf(r);
+  $('#p-name').textContent=e.name;
+  $('#p-sub').textContent=s==='in'?`Timed in ${fmtT(r.in)}`:s==='out'?`Done today: ${fmtT(r.in)} → ${fmtT(r.out)}`:(e.pos||'Enter your PIN');
+  $('#p-pinwrap').classList.toggle('hidden',s==='out');$('#p-step2').classList.add('hidden');
+  dots($('#p-dots'),0);$('#p-snaptxt').innerHTML='📷 Tap to take selfie';$('#p-file').value='';
+  $('#m-punch').classList.add('show');
+  if(P.sup&&s!=='out'){$('#p-sub').textContent=`👁 Supervised by ${SUP.by}`+(s==='in'?` · in since ${fmtT(r.in)}`:'');showStep2()}
+}
+buildPad($('#p-pad'),k=>{
+  if(k==='⌫')P.buf=P.buf.slice(0,-1);else if(k!=='✓'&&P.buf.length<4)P.buf+=k;
+  dots($('#p-dots'),P.buf.length);
+  if(P.buf.length===4){
+    const e=st.emps[P.id];
+    if(String(e.pin)===P.buf){showStep2()}else{toast('Wrong PIN');P.buf='';setTimeout(()=>dots($('#p-dots'),0),150)}
+  }
+});
+let tickH;
+function showStep2(){
+  const e=st.emps[P.id],r=todayRecs()[`${dkey()}_${P.id}`],isIn=statusOf(r)==='abs';
+  $('#p-pinwrap').classList.add('hidden');$('#p-step2').classList.remove('hidden');
+  const go=$('#p-go');go.textContent=isIn?'⏱ TIME IN':'⏱ TIME OUT';go.className='btn block '+(isIn?'green':'blue');
+  const upd=()=>{$('#p-time').textContent=fmtT(Date.now());
+    const nowM=mod(Date.now()),sM=toMin(st.cfg.start);
+    if(isIn){const late=nowM>sM+Number(st.cfg.grace)?nowM-sM:0;$('#p-info').innerHTML=late?`<span style="color:var(--late);font-weight:700">Late by ${late} min</span> (shift ${st.cfg.start})`:`On time · shift starts ${st.cfg.start}`}
+    else{const c=calc({...r,out:Date.now()},e);$('#p-info').innerHTML=`In since ${fmtT(r.in)} · <b>${h1(c.hours)} h</b> worked${c.ot?` · OT ${h1(c.ot)}h`:''}`}
+    go.disabled=!canPunch();
+    const base=isIn?'⏱ TIME IN':'⏱ TIME OUT';go.textContent=geoFlag(P.geo)&&st.cfg.geo==='warn'?base+' (outside 🚩)':base};
+  upd();clearInterval(tickH);tickH=setInterval(upd,1000);punchLocate();punchCam();
+}
+$('#p-file').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{P.photo=await shrink(f,260);$('#p-snaptxt').innerHTML=`<img src="${P.photo}"> <span>Retake</span>`;$('#p-go').disabled=!canPunch()}catch(err){toast('Could not read photo')}
+};
+/* ============ live camera snapshots ============ */
+const CAM={stream:null,el:null,ready:false,err:null};
+const photoOn=()=>Number(st.cfg.photo)===1;
+async function camStart(el){
+  if(CAM.stream&&CAM.el===el&&CAM.ready)return true;
+  camStop();CAM.el=el;CAM.ready=false;CAM.err=null;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){CAM.err='Camera not supported on this browser';return false}
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    if(CAM.el!==el){s.getTracks().forEach(t=>t.stop());return false}
+    CAM.stream=s;el.muted=true;el.playsInline=true;el.srcObject=s;
+    await el.play().catch(()=>{});
+    await new Promise(r=>{if(el.readyState>=2&&el.videoWidth)return r();el.onloadeddata=()=>r();setTimeout(r,4000)});
+    CAM.ready=CAM.el===el&&el.videoWidth>0;
+    if(!CAM.ready)CAM.err='Camera did not start';
+    return CAM.ready;
+  }catch(e){CAM.err=e&&e.name==='NotAllowedError'?'Camera permission denied — allow camera for this site':'Camera unavailable';CAM.el=null;return false}
+}
+function camStop(){if(CAM.stream)CAM.stream.getTracks().forEach(t=>t.stop());if(CAM.el)CAM.el.srcObject=null;CAM.stream=null;CAM.ready=false;CAM.el=null}
+function camSnap(lines){
+  const v=CAM.el;if(!CAM.ready||!v||!v.videoWidth)return null;
+  const W=360,H=Math.round(v.videoHeight/v.videoWidth*W),c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');x.drawImage(v,0,0,W,H);
+  const bh=15*lines.length+10;x.fillStyle='rgba(0,0,0,.62)';x.fillRect(0,H-bh,W,bh);
+  x.fillStyle='#fff';x.font='bold 12px Inter,Arial,sans-serif';lines.forEach((t,i)=>x.fillText(t,7,H-bh+17+i*15,W-14));
+  const el=v.parentElement;if(el){el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash')}
+  return c.toDataURL('image/jpeg',.68);
+}
+function stampLines(id,geo,sup){
+  const e=st.emps[id],r=todayRecs()[`${dkey()}_${id}`],type=statusOf(r)==='abs'?'TIME IN':'TIME OUT';
+  return [`${e.name} · ${type}`,
+    new Date().toLocaleString('en-PH',{timeZone:TZ,weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}),
+    geo?(geo.site?`${geo.site} · ${fmtDist(geo.dist)}${geo.inside===false?' · OUTSIDE':''}`:`GPS ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} ±${geo.acc}m`):'',
+    sup?`Supervised by ${sup}`:''].filter(Boolean);
+}
+/* punch modal camera */
+function punchCam(){
+  const box=$('#p-cam'),tag=$('#p-camtag'),fb=$('#p-snap');
+  if(!photoOn()){box.classList.add('hidden');fb.classList.add('hidden');camStop();return}
+  box.classList.remove('hidden');fb.classList.add('hidden');tag.textContent='● Starting camera…';
+  const want=P.id;
+  camStart($('#p-video')).then(ok=>{
+    if(P.id!==want)return;
+    if(ok){tag.textContent='● LIVE · photo taken when you tap';}
+    else{box.classList.add('hidden');fb.classList.remove('hidden');$('#p-snaptxt').innerHTML=`📷 ${esc(CAM.err||'Camera unavailable')} — tap to take photo`}
+    const go=$('#p-go');if(go)go.disabled=!canPunch();
+  });
+}
+function closePunch(){clearInterval(tickH);$('#m-punch').classList.remove('show');camStop();setTimeout(kcamSync,50)}
+$('#m-punch').addEventListener('click',e=>{if(e.target===$('#m-punch')||e.target.closest('[data-close]'))setTimeout(()=>{if(!$('#m-punch').classList.contains('show')){camStop();kcamSync()}},0)});
+/* kiosk camera strip for supervised quick tap */
+function kcamWanted(){return st.view==='kiosk'&&st.cfg.mode==='supervised'&&supActive()&&SUP.quick&&photoOn()&&!$('#m-punch').classList.contains('show')}
+function kcamSync(){
+  const box=$('#k-cam'),v=$('#k-video'),tag=$('#k-camtag');if(!box)return;
+  if(kcamWanted()){
+    box.classList.remove('hidden');
+    if(CAM.el!==v){tag.textContent='● Starting camera…';camStart(v).then(ok=>{tag.textContent=ok?'● LIVE · snapshot on every tap':'⚠️ '+(CAM.err||'Camera unavailable')})}
+  }else{box.classList.add('hidden');if(CAM.el===v)camStop()}
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!$('#m-punch').classList.contains('show'))camStop()}else kcamSync()});
+
+/* ---- save a punch (kiosk, supervised or quick tap) ---- */
+async function savePunch(id,{photo=null,geo=null,sup=null}={}){
+  const e=st.emps[id],date=dkey(),key=`${date}_${id}`,r=todayRecs()[key],now=Date.now(),first=e.name.split(' ')[0];
+  const G=geo||null,gx=G?{geo:G,outside:G.inside===false||undefined}:{},gr=G?(G.site?` · 📍 ${G.site} ${fmtDist(G.dist)}${G.inside===false?' OUTSIDE':''}`:' · 📍 located'):(geoOn()?' · no location':'');
+  const by=sup?`${e.name} (supervised by ${sup})`:`${e.name} (kiosk)`,tag=(navigator.onLine?'':' · saved offline')+(sup?` · 👁 ${sup}`:'');
+  const s=statusOf(r);
+  if(s==='abs'){
+    const nr={empId:id,name:e.name,date,in:now,out:null,inPhoto:photo,outPhoto:null,note:'',src:sup?'supervised':'kiosk',inGeo:G,...(sup?{supBy:sup}:{})};
+    await S.setAtt(key,nr);const late=calc(nr,e).late;
+    logAct({action:'TIME IN',recId:key,empId:id,empName:e.name,date,after:pickT(nr),by,reason:(late?`Late ${late} min`:'On time')+gr,photo:!!photo,...gx,...(sup?{sup}:{})});
+    return {key,prev:null,type:'in',msg:`✅ ${first} timed IN ${fmtT(now)}${tag}`};
+  }
+  if(s==='in'){
+    const nr={...r,out:now,outPhoto:photo,outGeo:G,...(sup?{outSupBy:sup}:{})};
+    await S.setAtt(key,nr);const c=calc(nr,e);
+    logAct({action:'TIME OUT',recId:key,empId:id,empName:e.name,date,before:pickT(r),after:pickT(nr),by,reason:`${h1(c.hours)}h worked`+gr,photo:!!photo,...gx,...(sup?{sup}:{})});
+    return {key,prev:r,type:'out',msg:`👋 ${first} timed OUT · ${h1(c.hours)}h${tag}`};
+  }
+  return {done:true,msg:`${first} already timed out today`};
+}
+$('#p-go').onclick=async()=>{
+  const btn=$('#p-go');if(!canPunch())return toast(st.cfg.geo==='block'&&!(P.geo&&P.geo.inside)?'You must be inside a job site':'Waiting for camera…');btn.disabled=true;
+  try{
+    let photo=P.photo||null;
+    if(photoOn()&&CAM.ready&&CAM.el===$('#p-video'))photo=camSnap(stampLines(P.id,P.geo,P.sup))||photo;
+    if(photoOn()&&!photo){btn.disabled=false;return toast('No photo — camera not ready')}
+    const res=await savePunch(P.id,{photo,geo:P.geo||null,sup:P.sup||null});
+    closePunch();
+    if(P.sup){SUP.count=(SUP.count||0)+1;saveSup();renderSupBar();showUndo(res)}else toast(res.msg);
+  }catch(err){btn.disabled=false;toast(err.code==='quota_exceeded'?'Storage full — export & delete old records':'Save failed: '+(err.message||err.code))}
+};
+
+/* ---- supervised session ---- */
+let SUP=null,pendingSup=false,quickBusy={};
+try{SUP=JSON.parse(localStorage.getItem('kir_sup'))}catch(e){}
+const supActive=()=>!!(SUP&&SUP.until>Date.now());
+function saveSup(){try{SUP?localStorage.setItem('kir_sup',JSON.stringify(SUP)):localStorage.removeItem('kir_sup')}catch(e){}}
+function renderSupBar(){
+  const b=$('#sup-bar');if(!b)return;
+  if(st.cfg.mode!=='supervised'){b.className='supbar hidden';$('#k-head').textContent='TAP YOUR NAME TO TIME IN / OUT';return}
+  if(supActive()){
+    const left=Math.max(0,Math.round((SUP.until-Date.now())/60000));
+    b.className='supbar on';
+    b.innerHTML=`<div><b>👁 Supervised by ${esc(SUP.by)}</b><br><small>until ${fmtT(SUP.until)} (${left>=60?Math.floor(left/60)+'h '+left%60+'m':left+'m'} left) · ${SUP.count||0} punch${(SUP.count||0)===1?'':'es'}</small></div>
+      <label class="flex" style="font-size:12px;gap:5px;margin:0;color:inherit;font-weight:700"><input type="checkbox" id="sup-quick" ${SUP.quick?'checked':''} style="width:auto">Quick</label>
+      <button class="btn sm sec" id="sup-end">End</button>`;
+    $('#k-head').textContent=SUP.quick?'TAP NAME = INSTANT TIME IN / OUT':'TAP YOUR NAME TO TIME IN / OUT';
+  }else{
+    b.className='supbar off';
+    b.innerHTML=`<div><b>🔒 Supervisor needed</b><br><small>Admin or foreman starts a session to allow tap-to-punch</small></div><button class="btn sm" id="sup-start">Start session</button>`;
+    $('#k-head').textContent='WAITING FOR SUPERVISOR';
+  }
+  kcamSync();
+}
+function openSup(){$('#su-by').value=ME||'';$('#su-quick').checked=false;$('#su-len').value='8';$('#m-sup').classList.add('show')}
+$('#su-start').onclick=()=>{
+  const by=$('#su-by').value.trim();if(!by)return toast('Enter supervisor name');
+  const v=$('#su-len').value,until=v==='eod'?tsFrom(dkey(),'23:59'):Date.now()+Number(v)*3600000;
+  SUP={by,until,quick:$('#su-quick').checked,count:0,started:Date.now()};saveSup();setMe(by);
+  st.admin=false;$('#m-sup').classList.remove('show');
+  logAct({action:'SUPERVISE START',by,detail:`Until ${fmtT(until)}${SUP.quick?' · quick tap':''}`});
+  go('kiosk');renderSupBar();toast(`👁 Session started — admin tabs locked`);
+};
+function endSup(why){
+  if(!SUP)return;const s=SUP;SUP=null;saveSup();
+  logAct({action:'SUPERVISE END',by:s.by,detail:`${why||'Ended'} · ${s.count||0} punch(es) · ${fmtT(s.started)}–${fmtT(Date.now())}`});
+  renderSupBar();toast(`Session ended · ${s.count||0} punch(es)`);
+}
+document.addEventListener('click',e=>{
+  if(e.target.id==='sup-start'){if(st.admin)openSup();else{pendingSup=true;pendingManual=false;pendingView=null;openAdmin()}}
+  if(e.target.id==='sup-end')endSup('Ended by supervisor');
+});
+document.addEventListener('change',e=>{if(e.target.id==='sup-quick'&&SUP){SUP.quick=e.target.checked;saveSup();renderSupBar();toast(SUP.quick?'⚡ Quick tap on — one tap punches':'Quick tap off — confirm screen')}});
+
+/* ---- quick tap: instant punch with undo ---- */
+async function quickPunch(id){
+  const e=st.emps[id],r=todayRecs()[`${dkey()}_${id}`];
+  if(statusOf(r)==='out')return toast(`${e.name.split(' ')[0]} already timed out today`);
+  if(quickBusy[id])return;quickBusy[id]=1;
+  const card=document.querySelector(`[data-emp="${id}"]`);card&&card.classList.add('busy');
+  try{
+    let geo=null;
+    if(geoOn()){
+      try{const pos=await getPos(60000);const n=hasSites()?nearestSite(pos):null;geo={...pos,...(n||{}),inside:n?n.dist<=n.radius:null}}
+      catch(err){if(st.cfg.geo==='block'&&hasSites())return toast('📍 '+err.message)}
+      if(st.cfg.geo==='block'&&hasSites()&&geo&&!geo.inside)return toast(`🚩 Outside ${geo.site} (${fmtDist(geo.dist)}) — blocked`);
+    }
+    let photo=null;
+    if(photoOn()){
+      if(!(CAM.ready&&CAM.el===$('#k-video'))){kcamSync();return toast('📷 Camera not ready — '+(CAM.err||'wait a second and tap again'))}
+      photo=camSnap(stampLines(id,geo,SUP.by));
+    }
+    const res=await savePunch(id,{photo,geo,sup:SUP.by});
+    SUP.count=(SUP.count||0)+1;saveSup();renderSupBar();showUndo(res);
+  }catch(err){toast('Save failed: '+(err.message||err.code))}
+  finally{delete quickBusy[id];const c2=document.querySelector(`[data-emp="${id}"]`);c2&&c2.classList.remove('busy')}
+}
+let UNDO=null;
+function showUndo(res){
+  if(!res||res.done){toast(res?.msg||'');return}
+  const u=$('#undo');UNDO=res;$('#undo-msg').textContent=res.msg;u.classList.add('show');
+  clearTimeout(u._t);u._t=setTimeout(()=>{u.classList.remove('show');UNDO=null},7000);
+}
+$('#undo-btn').onclick=async()=>{
+  const x=UNDO;if(!x)return;UNDO=null;$('#undo').classList.remove('show');
+  const cur=todayRecs()[x.key],by=SUP?.by||ME||'Supervisor';
+  try{
+    if(x.type==='in'){await S.delAtt(x.key);logAct({action:'DELETE',recId:x.key,empId:cur?.empId,empName:cur?.name,date:cur?.date||dkey(),before:pickT(cur),reason:'Undo time in',by})}
+    else{await S.setAtt(x.key,x.prev);logAct({action:'EDIT',recId:x.key,empId:x.prev.empId,empName:x.prev.name,date:x.prev.date,before:pickT(cur),after:pickT(x.prev),reason:'Undo time out',by})}
+    if(SUP&&SUP.count)SUP.count--,saveSup(),renderSupBar();
+    toast('↩ Undone');
+  }catch(err){toast('Undo failed: '+err.message)}
+};
+
+function shrink(file,max){return new Promise((res,rej)=>{const img=new Image();const url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);res(c.toDataURL('image/jpeg',.6))};img.onerror=rej;img.src=url})}
+
+/* staff edit */
+let editId=null;
+$('#s-add').onclick=()=>openEmp(null);
+$('#s-list').onclick=e=>{const r=e.target.closest('[data-edit]');if(r)openEmp(r.dataset.edit)};
+function openEmp(id){
+  editId=id;const e=id?st.emps[id]:{name:'',pos:'',rate:'',pin:String(Math.floor(1000+Math.random()*9000)),active:true};
+  $('#e-title').textContent=id?'Edit worker':'Add worker';
+  $('#e-name').value=e.name;$('#e-pos').value=e.pos||'';$('#e-rate').value=e.rate||'';$('#e-pin').value=e.pin;$('#e-active').value=e.active===false?'0':'1';
+  $('#e-del').classList.toggle('hidden',!id);$('#m-emp').classList.add('show');
+}
+$('#e-save').onclick=async()=>{
+  const name=$('#e-name').value.trim(),pin=$('#e-pin').value.trim();
+  if(!name)return toast('Name required');if(!/^\d{4}$/.test(pin))return toast('PIN must be 4 digits');
+  const dup=Object.entries(st.emps).find(([k,v])=>k!==editId&&String(v.pin)===pin);if(dup)return toast('PIN already used by '+dup[1].name);
+  const id=editId||uid(),old=editId?st.emps[editId]:null;
+  const nd={name,pos:$('#e-pos').value.trim(),rate:Number($('#e-rate').value)||0,pin,active:$('#e-active').value==='1'};
+  try{await S.setEmp(id,nd);$('#m-emp').classList.remove('show');toast('Saved · PIN '+pin);
+    let ch=[];if(old){if(old.name!==nd.name)ch.push(`name ${old.name}→${nd.name}`);if((old.pos||'')!==nd.pos)ch.push(`position →${nd.pos||'—'}`);if(Number(old.rate)!==nd.rate)ch.push(`rate ${peso(old.rate)}→${peso(nd.rate)}`);if(String(old.pin)!==pin)ch.push('PIN changed');if((old.active!==false)!==nd.active)ch.push(nd.active?'set active':'set inactive')}
+    logAct({action:old?'WORKER EDIT':'WORKER ADD',empId:id,empName:name,detail:old?(ch.join(' · ')||'no changes'):`${nd.pos||'—'} · ${peso(nd.rate)}/day`});
+  }catch(e){toast('Save failed: '+e.message)}
+};
+let delArm=0;
+$('#e-del').onclick=async()=>{if(Date.now()-delArm>3000){delArm=Date.now();toast('Tap Delete again to confirm');return}const old=st.emps[editId];await S.delEmp(editId);$('#m-emp').classList.remove('show');toast('Worker deleted (records kept)');logAct({action:'WORKER DELETE',empId:editId,empName:old?.name,detail:'Attendance records kept'})};
+
+/* record edit (admin) */
+let recId=null,recData=null,recCtx={};
+document.addEventListener('click',e=>{const r=e.target.closest('[data-rec]');if(!r||e.target.closest('[data-lb]')||!st.admin)return;
+  const id=r.dataset.rec,d=st.day[id]||st.week[id]||st.report.find(x=>x.id===id);if(d)openRec(id,d)});
+function openRec(id,data,empId,date){
+  recId=id;recData=data||null;recCtx={empId:data?.empId||empId,date:data?.date||date};
+  const isNew=!data,nm=st.emps[recCtx.empId]?.name||data?.name||'';
+  $('#rc-name').textContent=nm;$('#rc-date').textContent=prettyDate(recCtx.date)+(isNew?' · new record':'');
+  $('#rc-in').value=isNew?st.cfg.start:hhmm(data.in);$('#rc-out').value=isNew?st.cfg.end:hhmm(data.out);$('#rc-note').value=data?.note||'';
+  $('#rc-geo').innerHTML=isNew?'':[['In',data.inGeo],['Out',data.outGeo]].filter(x=>x[1]).map(([l,g])=>`<div style="font-size:12px;margin-top:4px">📍 <b>${l}:</b> <span class="${g.inside===false?'flag':''}">${esc(geoTxt(g))}</span> <span style="color:var(--mute)">±${g.acc} m</span> · <a href="${mapsUrl(g)}" target="_blank" rel="noopener" style="color:var(--brand)">Map ↗</a></div>`).join('');
+  $('#rc-photos').innerHTML=isNew?`<div style="font-size:12px;color:var(--mute)">Defaults to shift ${st.cfg.start}–${st.cfg.end}. Clear Time out to leave it open.</div>`:[['IN',data.inPhoto],['OUT',data.outPhoto]].filter(x=>x[1]).map(([l,p])=>`<div style="text-align:center;font-size:11px;color:var(--mute)"><img src="${p}" data-lb style="width:90px;height:90px;border-radius:12px;object-fit:cover;cursor:zoom-in"><br>${l}</div>`).join('');
+  $('#rc-del').textContent=isNew?'Cancel':'Delete record';$('#rc-save').textContent=isNew?'Add record':'Save';
+  $('#rc-by').value=ME;
+  $('#rc-hist').innerHTML='';
+  if(!isNew)S.recLogs(id).then(ls=>{if(recId!==id)return;ls.sort((a,b)=>b.ts-a.ts);
+    $('#rc-hist').innerHTML=ls.length?`<b style="font-size:12px">History (${ls.length})</b>`+ls.map(l=>`<div class="lg"><div class="tm">${shortT(l.ts)}<br>${new Date(l.ts).toLocaleDateString('en-PH',{timeZone:TZ,month:'short',day:'numeric'})}</div><div class="bd"><span class="ac" style="background:${(ACT[l.action]||['#64748b'])[0]}">${esc(l.action)}</span><b>${esc(l.by)}</b><div class="dt">${logDetail(l)}${l.reason?` · <i>${esc(l.reason)}</i>`:''}</div></div></div>`).join(''):`<div style="font-size:11px;color:var(--mute)">No log history for this record.</div>`}).catch(()=>{});
+  $('#m-rec').classList.add('show');
+}
+$('#rc-save').onclick=async()=>{
+  let base;if(recData){const {_c,id,...b}=recData;base=b}else{const e=st.emps[recCtx.empId]||{};base={empId:recCtx.empId,name:e.name||'',date:recCtx.date,inPhoto:null,outPhoto:null}}
+  const inT=tsFrom(base.date,$('#rc-in').value),outT=tsFrom(base.date,$('#rc-out').value);
+  if(!inT)return toast('Time in required');if(outT&&outT<=inT)return toast('Out must be after in');
+  const note=$('#rc-note').value.trim(),by=$('#rc-by').value.trim();
+  if(!note)return toast('Reason / note is required');if(!by)return toast('Enter your name (Entered by)');
+  setMe(by);
+  const isNew=!recData,nr={...base,in:inT,out:outT||null,note,edited:true,src:isNew?'manual':(base.src||'kiosk'),by};
+  try{await S.setAtt(recId,nr);$('#m-rec').classList.remove('show');toast(isNew?'Record added':'Record updated');
+    logAct({action:isNew?'MANUAL ADD':'EDIT',recId,empId:base.empId,empName:st.emps[base.empId]?.name||base.name,date:base.date,before:isNew?undefined:pickT(recData),after:pickT(nr),reason:note,by});
+    if(st.view==='reports')runReport()}catch(e){toast('Save failed: '+e.message)}
+};
+let rdArm=0;
+$('#rc-del').onclick=async()=>{if(!recData){$('#m-rec').classList.remove('show');return}
+  const note=$('#rc-note').value.trim(),by=$('#rc-by').value.trim();if(!by)return toast('Enter your name (Entered by)');
+  if(Date.now()-rdArm>3000){rdArm=Date.now();toast('Tap again to delete record');return}
+  setMe(by);await S.delAtt(recId);logAct({action:'DELETE',recId,empId:recData.empId,empName:st.emps[recData.empId]?.name||recData.name,date:recData.date,before:pickT(recData),reason:note||'Deleted',by});$('#m-rec').classList.remove('show');toast('Record deleted');if(st.view==='reports')runReport()};
+
+/* board date */
+$('#t-date').onchange=e=>subDay(e.target.value||dkey());
+
+/* reports */
+$('#r-from').onchange=runReport;$('#r-to').onchange=runReport;
+$$('[data-rq]').forEach(b=>b.onclick=()=>setRange(b.dataset.rq));
+$('#r-csv').onclick=async()=>{
+  const name=`attendance_${$('#r-from').value}_to_${$('#r-to').value}.csv`;
+  saveFile(name,reportCSV());
+};
+$('#r-copy').onclick=async()=>{try{await navigator.clipboard.writeText(reportText());toast('Summary copied — paste in Viber')}catch(e){toast('Copy blocked')}};
+
+/* settings */
+function fillSettings(){const c=st.cfg;$('#c-start').value=c.start;$('#c-end').value=c.end;$('#c-grace').value=c.grace;$('#c-lunch').value=c.lunch;$('#c-reg').value=c.reg;$('#c-ot').value=c.ot;$('#c-photo').value=String(c.photo);$('#c-mode').value=c.mode||'pin';$('#c-admin').value=c.admin;prevSettings();gfLoad()}
+function prevSettings(){const s=toMin($('#c-start').value),e=toMin($('#c-end').value),l=Number($('#c-lunch').value)||0;const net=(e-s-l)/60;
+  $('#c-preview').innerHTML=`Shift length: <b>${h1((e-s)/60)} h</b> − lunch ${l}m = <b>${h1(net)} h paid</b> · Late after <b>${(()=>{const m=s+Number($('#c-grace').value||0);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')})()}</b>`}
+['#c-start','#c-end','#c-grace','#c-lunch'].forEach(s=>$(s).oninput=prevSettings);
+$('#c-save').onclick=async()=>{
+  const a=$('#c-admin').value.trim();if(!/^\d{4,6}$/.test(a))return toast('Admin PIN: 4–6 digits');
+  const d={start:$('#c-start').value||'08:00',end:$('#c-end').value||'17:00',grace:Number($('#c-grace').value)||0,lunch:Number($('#c-lunch').value)||0,reg:Number($('#c-reg').value)||8,ot:Number($('#c-ot').value)||1,photo:Number($('#c-photo').value),mode:$('#c-mode').value,admin:a,geo:st.cfg.geo||'off',sites:st.cfg.sites||[]};
+  const old=st.cfg,ch=Object.keys(d).filter(k=>k!=='sites'&&k!=='geo'&&String(old[k])!==String(d[k])).map(k=>k==='admin'?'admin PIN changed':`${k}: ${old[k]}→${d[k]}`);
+  try{await S.setCfg(d);if(!DB){st.cfg={...DEFAULTS,...d}}toast('Settings saved');if(ch.length)logAct({action:'SETTINGS',detail:ch.join(' · ')})}catch(e){toast('Save failed: '+e.message)}
+};
+
+/* ============ manual attendance ============ */
+let MN={t:'full',sel:new Set()},pendingManual=false;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-manual]');if(!b)return;if(!st.admin){pendingManual=true;pendingView=null;openAdmin();return}openManual()});
+function openManual(){
+  MN={t:'full',sel:new Set()};$('#mn-date').value=dkey();$('#mn-in').value=st.cfg.start;$('#mn-out').value=st.cfg.end;$('#mn-reason').value='';$('#mn-by').value=ME;
+  setMnType('full');renderMnEmps();$('#m-manual').classList.add('show');
+}
+function setMnType(t){
+  MN.t=t;$$('#mn-type button').forEach(b=>b.className='btn sm '+(b.dataset.t===t?'':'sec'));
+  $('#mn-inw').classList.toggle('hidden',t==='out'||t==='absent');$('#mn-outw').classList.toggle('hidden',t==='in'||t==='absent');
+  if(t==='absent'&&!$('#mn-reason').value)$('#mn-reason').value='Absent';mnPreview();
+}
+$('#mn-type').onclick=e=>{const b=e.target.closest('[data-t]');if(b)setMnType(b.dataset.t)};
+function renderMnEmps(){
+  const all=activeEmps();
+  $('#mn-emps').innerHTML=all.map(([id,e])=>`<span class="chip ${MN.sel.has(id)?'on':''}" data-id="${id}">${esc(e.name)}</span>`).join('')||'<span style="font-size:12px;color:var(--mute)">No workers yet</span>';
+  $('#mn-cnt').textContent=MN.sel.size?`(${MN.sel.size} selected)`:'';$('#mn-all').textContent=MN.sel.size&&MN.sel.size===all.length?'Clear':'Select all';mnPreview();
+}
+$('#mn-emps').onclick=e=>{const c=e.target.closest('[data-id]');if(!c)return;const id=c.dataset.id;MN.sel.has(id)?MN.sel.delete(id):MN.sel.add(id);renderMnEmps()};
+$('#mn-all').onclick=()=>{const all=activeEmps().map(x=>x[0]);MN.sel=MN.sel.size===all.length?new Set():new Set(all);renderMnEmps()};
+['#mn-date','#mn-in','#mn-out'].forEach(s=>$(s).oninput=mnPreview);
+function mnPreview(){
+  const d=$('#mn-date').value,t=MN.t,n=MN.sel.size;let txt='';
+  if(t==='full'&&d){const r={in:tsFrom(d,$('#mn-in').value),out:tsFrom(d,$('#mn-out').value)};if(r.in&&r.out&&r.out>r.in){const c=calc(r,{});txt=`Each: <b>${h1(c.hours)} h</b>${c.ot?` · OT ${h1(c.ot)}h`:''}${c.late?` · <span style="color:var(--late)">late ${c.late}m</span>`:''} · total <b>${h1(c.hours*n)} man-hours</b>`}else txt='<span style="color:var(--abs)">Time out must be after time in</span>'}
+  if(t==='in')txt='Sets time in only — record stays open until timed out.';
+  if(t==='out')txt='Adds time out to existing time-in records. Workers without a time in are skipped.';
+  if(t==='absent')txt='<span style="color:var(--abs)">Removes any record for the selected workers on this date.</span>';
+  $('#mn-preview').innerHTML=(d?prettyDate(d)+' · ':'')+`${n} worker(s) · `+txt;
+}
+$('#mn-save').onclick=async()=>{
+  const date=$('#mn-date').value,reason=$('#mn-reason').value.trim(),by=$('#mn-by').value.trim(),t=MN.t;
+  if(!date)return toast('Pick a date');if(!MN.sel.size)return toast('Select at least one worker');if(!reason)return toast('Reason is required');if(!by)return toast('Enter your name (Entered by)');
+  const inT=tsFrom(date,$('#mn-in').value),outT=tsFrom(date,$('#mn-out').value);
+  if((t==='full'||t==='in')&&!inT)return toast('Time in required');if((t==='full'||t==='out')&&!outT)return toast('Time out required');if(t==='full'&&outT<=inT)return toast('Time out must be after time in');
+  setMe(by);const btn=$('#mn-save');btn.disabled=true;
+  const existing={};try{(await S.range(date,date)).forEach(r=>existing[r.id]=r)}catch(e){}
+  let ok=0;const skip=[];
+  for(const id of MN.sel){
+    const e=st.emps[id],k=`${date}_${id}`,old=existing[k];const {id:_x,_c,...ob}=old||{};
+    try{
+      if(t==='absent'){if(old)await S.delAtt(k);await logAct({action:'MARK ABSENT',recId:k,empId:id,empName:e.name,date,before:pickT(old),reason,by});ok++;continue}
+      let nr;
+      if(t==='full')nr={inPhoto:null,outPhoto:null,...ob,empId:id,name:e.name,date,in:inT,out:outT};
+      if(t==='in')nr={inPhoto:null,outPhoto:null,out:null,...ob,empId:id,name:e.name,date,in:inT};
+      if(t==='out'){if(!old||!old.in){skip.push(e.name+' (no time in)');continue}nr={...ob,out:outT}}
+      if(nr.out&&nr.out<=nr.in){skip.push(e.name+' (out before in)');continue}
+      Object.assign(nr,{note:reason,edited:true,src:old?.src==='kiosk'?'kiosk':'manual',by});
+      await S.setAtt(k,nr);
+      await logAct({action:t==='full'?'MANUAL ADD':t==='in'?'MANUAL IN':'MANUAL OUT',recId:k,empId:id,empName:e.name,date,before:pickT(old),after:pickT(nr),reason,by});ok++;
+    }catch(err){skip.push(e.name+' (error)')}
+  }
+  btn.disabled=false;$('#m-manual').classList.remove('show');
+  toast(`✍ Saved ${ok} manual record(s)`+(skip.length?` · skipped: ${skip.join(', ')}`:''));
+  if(st.view==='logs')runLogs();if(st.view==='reports')runReport();
+};
+
+/* ============ logs view ============ */
+function initLogs(){
+  if(!$('#l-from').value){const ws=weekStart(dkey());$('#l-from').value=ws;$('#l-to').value=addDays(ws,6)}
+  const cur=$('#l-emp').value;
+  $('#l-emp').innerHTML='<option value="">All workers</option>'+Object.entries(st.emps).sort((a,b)=>a[1].name.localeCompare(b[1].name)).map(([id,e])=>`<option value="${id}">${esc(e.name)}</option>`).join('');
+  $('#l-emp').value=cur;runLogs();
+}
+async function runLogs(){
+  const f=$('#l-from').value,t=$('#l-to').value;if(!f||!t)return;
+  $('#l-list').innerHTML='<div class="empty">Loading…</div>';
+  try{st.logs=(await S.logs(tsFrom(f,'00:00'),tsFrom(t,'23:59')+59999)).sort((a,b)=>b.ts-a.ts)}catch(e){$('#l-list').innerHTML=`<div class="empty">Could not load logs: ${esc(e.message)}</div>`;return}
+  renderLogs();
+}
+function filtLogs(){
+  const ty=$('#l-type').value,emp=$('#l-emp').value,q=$('#l-q').value.trim().toLowerCase();
+  return (st.logs||[]).filter(l=>(!ty||(ty==='outside'?l.outside:(ACT[l.action]||[])[1]===ty))&&(!emp||l.empId===emp)&&(!q||[l.empName,l.by,l.reason,l.detail,l.action].join(' ').toLowerCase().includes(q)));
+}
+function renderLogs(){
+  const L=filtLogs(),cnt=g=>L.filter(l=>(ACT[l.action]||[])[1]===g).length,tot=L.length||1;
+  $('#l-stats').innerHTML=statTile(L.length,'Events','var(--brand)',null)+statTile(cnt('kiosk'),'Kiosk punches','var(--in)',cnt('kiosk')/tot)+statTile(cnt('manual'),'Manual','#7c3aed',cnt('manual')/tot)+statTile(cnt('edit')+cnt('delete'),'Edits / deletes','var(--late)',(cnt('edit')+cnt('delete'))/tot);
+  if(!L.length){$('#l-list').innerHTML='<div class="card empty">No activity in this range.</div>';return}
+  const g={};L.forEach(l=>(g[dkey(new Date(l.ts))]=g[dkey(new Date(l.ts))]||[]).push(l));
+  $('#l-list').innerHTML=Object.entries(g).map(([d,ls])=>`<h2>${prettyDate(d)} <small>${ls.length} event${ls.length>1?'s':''}</small></h2><div class="card" style="padding:4px 14px">`+ls.map(l=>`<div class="lg" ${l.recId?`data-logrec="${l.recId}" style="cursor:pointer"`:''}><div class="tm">${shortT(l.ts)}</div><div class="bd"><span class="ac" style="background:${(ACT[l.action]||['#64748b'])[0]}">${esc(l.action)}</span><b>${esc(l.empName||'')}</b>${l.photo?' 📷':''}${l.outside?' <span class="flag">🚩</span>':''}<div class="dt">${logDetail(l)}${l.reason?` · <i>${esc(l.reason)}</i>`:''}<br>by <b>${esc(l.by)}</b></div></div></div>`).join('')+'</div>').join('');
+}
+$('#l-list').onclick=async e=>{const r=e.target.closest('[data-logrec]');if(!r)return;const id=r.dataset.logrec,[d]=id.split('_');
+  try{const rec=(await S.range(d,d)).find(x=>x.id===id);if(rec)openRec(id,rec);else toast('Record no longer exists (deleted / absent)')}catch(err){}};
+['#l-from','#l-to'].forEach(s=>$(s).onchange=runLogs);['#l-type','#l-emp'].forEach(s=>$(s).onchange=renderLogs);$('#l-q').oninput=renderLogs;$('#l-refresh').onclick=runLogs;
+function logsCSV(){const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const L=[['Logged at','Action','Worker','Record date','Before','After','Reason','Entered by','Detail','Selfie','Site','Distance m','Inside fence','GPS lat','GPS lng','Accuracy m']];
+  filtLogs().forEach(l=>L.push([new Date(l.ts).toLocaleString('en-PH',{timeZone:TZ}),l.action,l.empName||'',l.date||'',l.before?spanTxt(l.before):'',l.after?spanTxt(l.after):'',l.reason||'',l.by||'',l.detail||'',l.photo?'yes':'',l.geo?.site||'',l.geo?.dist??'',l.geo?(l.geo.inside==null?'':l.geo.inside?'yes':'NO'):'',l.geo?.lat??'',l.geo?.lng??'',l.geo?.acc??'']));
+  return L.map(r=>r.map(q).join(',')).join('\n')}
+$('#l-csv').onclick=async()=>{const name=`attendance_logs_${$('#l-from').value}_to_${$('#l-to').value}.csv`;
+  saveFile(name,logsCSV())};
+$('#l-copy').onclick=async()=>{const t=`ACTIVITY LOG ${$('#l-from').value} – ${$('#l-to').value}\n`+filtLogs().map(l=>`${new Date(l.ts).toLocaleString('en-PH',{timeZone:TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${l.action} · ${l.empName||''}${l.after?' · '+spanTxt(l.after):''}${l.reason?' · '+l.reason:''} · by ${l.by}`).join('\n');
+  try{await navigator.clipboard.writeText(t);toast('Logs copied')}catch(e){toast('Copy blocked')}};
+$('#c-staff').onclick=()=>go('staff');
+
+/* clock */
+function tick(){const n=new Date();if(SUP&&SUP.until<=Date.now())endSup('Session time ended');$('#ck-t').textContent=n.toLocaleTimeString('en-PH',{timeZone:TZ,hour:'numeric',minute:'2-digit',second:'2-digit'});$('#ck-d').textContent=n.toLocaleDateString('en-PH',{timeZone:TZ,weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  if(st.view==='kiosk'&&st.boardDate!==dkey())subDay(dkey())}
+setInterval(tick,1000);tick();
+
+/* ============ geofencing ============ */
+const NASUGBU=[14.0723,120.6326];
+function distM(a,b){const R=6371000,t=x=>x*Math.PI/180;const dLa=t(b.lat-a.lat),dLo=t(b.lng-a.lng);const h=Math.sin(dLa/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+const fmtDist=m=>m>=1000?(m/1000).toFixed(m>=10000?0:1)+' km':Math.round(m)+' m';
+function nearestSite(pos){let best=null;(st.cfg.sites||[]).forEach(s=>{const d=distM(pos,s);if(!best||d-s.radius<best.dist-best.radius)best={site:s.name,siteId:s.id,dist:Math.round(d),radius:s.radius}});return best}
+function getPos(maxAge=5000){return new Promise((res,rej)=>{
+  if(!navigator.geolocation)return rej(new Error('Location not supported on this device'));
+  navigator.geolocation.getCurrentPosition(p=>res({lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy),at:Date.now()}),
+    e=>rej(new Error(e.code===1?'Location permission denied — allow location for this site in browser settings':e.code===3?'Location timed out — move near a window / outdoors':'Location unavailable')),
+    {enableHighAccuracy:true,timeout:20000,maximumAge:maxAge})})}
+const geoOn=()=>st.cfg.geo&&st.cfg.geo!=='off';
+const hasSites=()=>(st.cfg.sites||[]).length>0;
+const geoFlag=g=>g&&g.inside===false;
+const mapsUrl=g=>`https://maps.google.com/?q=${g.lat},${g.lng}`;
+function geoTxt(g){if(!g)return '';return g.site?`${g.site} · ${fmtDist(g.dist)}${g.inside===false?' (outside)':''}`:`${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}`}
+function canPunch(){
+  if(photoOn()&&!P.photo&&!CAM.ready)return false;
+  if(geoOn()&&st.cfg.geo==='block'&&hasSites())return !!(P.geo&&P.geo.inside);
+  return true;
+}
+function tileLayer(){return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'})}
+function drawSites(layer,selIdx,sites){
+  (sites||[]).forEach((s,i)=>{const on=i===selIdx;
+    L.circle([s.lat,s.lng],{radius:s.radius,color:on?'#0f766e':'#14b8a6',weight:on?3:1.5,fillColor:'#14b8a6',fillOpacity:on?.2:.1}).addTo(layer);
+    L.circleMarker([s.lat,s.lng],{radius:4,color:'#0f766e',fillColor:'#0f766e',fillOpacity:1}).bindTooltip(`${esc(s.name)} · ${s.radius} m`,{permanent:on,direction:'top'}).addTo(layer)});
+}
+function meDot(layer,g){
+  if(g.acc)L.circle([g.lat,g.lng],{radius:g.acc,color:'#2563eb',weight:1,fillOpacity:.08,dashArray:'4 4'}).addTo(layer);
+  L.circleMarker([g.lat,g.lng],{radius:7,color:'#fff',weight:2.5,fillColor:g.inside===false?'#dc2626':'#2563eb',fillOpacity:1}).addTo(layer);
+}
+
+/* --- punch modal: locate + mini map --- */
+let PM=null,PML=null;
+async function punchLocate(){
+  P.geo=null;const box=$('#p-geo');
+  if(!geoOn()){box.classList.add('hidden');$('#p-map').classList.add('hidden');return}
+  box.classList.remove('hidden');box.className='geo wait';box.innerHTML='📍 Getting your location…';
+  const want=P.id;
+  try{
+    const pos=await getPos();if(P.id!==want)return;
+    const n=hasSites()?nearestSite(pos):null;
+    P.geo={...pos,...(n||{}),inside:n?n.dist<=n.radius:null};
+    const g=P.geo,weak=g.acc>100;
+    if(!n){box.className='geo ok';box.innerHTML=`📍 Location captured (±${g.acc} m)<br><small>No job sites set up — admin can add them in Settings</small>`}
+    else if(g.inside){box.className='geo ok';box.innerHTML=`✅ Inside <b>${esc(g.site)}</b><br><small>${fmtDist(g.dist)} from center · limit ${g.radius} m · GPS ±${g.acc} m</small>`}
+    else{box.className='geo bad';box.innerHTML=`🚩 Outside <b>${esc(g.site)}</b> — ${fmtDist(g.dist)} away<br><small>Limit ${g.radius} m · GPS ±${g.acc} m${weak?' · weak signal, try again outdoors':''}${st.cfg.geo==='block'?' · <b>Time in/out blocked</b>':' · will be flagged'}</small> <button class="btn sm sec" id="p-relocate" style="margin-top:6px">↻ Retry</button>`}
+    punchMap();
+  }catch(err){
+    if(P.id!==want)return;
+    box.className='geo bad';box.innerHTML=`⚠️ ${esc(err.message)}${st.cfg.geo==='block'&&hasSites()?'<br><small>Time in/out blocked — ask admin for manual entry</small>':'<br><small>Will be saved without location</small>'} <button class="btn sm sec" id="p-relocate" style="margin-top:6px">↻ Retry</button>`;
+    $('#p-map').classList.add('hidden');
+  }
+}
+document.addEventListener('click',e=>{if(e.target.id==='p-relocate'){e.preventDefault();punchLocate()}});
+function punchMap(){
+  const el=$('#p-map');if(!window.L||!P.geo){el.classList.add('hidden');return}
+  el.classList.remove('hidden');
+  if(!PM){PM=L.map(el,{zoomControl:false,attributionControl:false,dragging:true});tileLayer().addTo(PM);PML=L.layerGroup().addTo(PM)}
+  PML.clearLayers();drawSites(PML,-1,st.cfg.sites);meDot(PML,P.geo);
+  const s=(st.cfg.sites||[]).find(x=>x.id===P.geo.siteId);
+  setTimeout(()=>{PM.invalidateSize();
+    if(s&&P.geo.dist<5000)PM.fitBounds(L.latLngBounds([[s.lat,s.lng],[P.geo.lat,P.geo.lng]]).pad(.6).extend(L.latLng(s.lat,s.lng).toBounds(s.radius*2.2)));
+    else PM.setView([P.geo.lat,P.geo.lng],17)},60);
+}
+
+/* --- settings: site editor --- */
+const GF={mode:'off',sites:[],sel:-1,dirty:false,me:null};
+let LM=null,LML=null;
+function gfLoad(force){if(GF.dirty&&!force)return;GF.mode=st.cfg.geo||'off';GF.sites=JSON.parse(JSON.stringify(st.cfg.sites||[]));if(GF.sel>=GF.sites.length)GF.sel=GF.sites.length-1;if(GF.sel<0&&GF.sites.length)GF.sel=0;$('#gf-mode').value=GF.mode;gfRender()}
+function gfRender(){
+  $('#gf-list').innerHTML=GF.sites.length?GF.sites.map((s,i)=>`<div class="site ${i===GF.sel?'on':''}" data-gi="${i}">
+    <div class="flex"><span class="sdot">${i+1}</span><input value="${esc(s.name)}" data-f="name" placeholder="Site name" style="flex:1"><button class="btn sm sec" data-gdel="${i}" title="Delete">🗑</button></div>
+    <div class="flex" style="margin-top:8px"><span style="font-size:11px;color:var(--mute);width:44px">Radius</span><input type="range" min="25" max="1000" step="5" value="${s.radius}" data-f="radius" style="flex:1;padding:0;border:0;background:none"><b class="mono rlab" style="width:62px;text-align:right">${s.radius} m</b></div>
+    <div class="grid g2" style="margin-top:6px"><input class="mono" value="${s.lat}" data-f="lat" inputmode="decimal" placeholder="Latitude"><input class="mono" value="${s.lng}" data-f="lng" inputmode="decimal" placeholder="Longitude"></div>
+    <div style="font-size:11px;color:var(--mute);margin-top:6px">Area ≈ <b class="alab">${fmtArea(s.radius)}</b>${GF.me?` · you are <b>${fmtDist(distM(GF.me,s))}</b> away`:''}</div></div>`).join(''):`<div class="empty" style="padding:14px">No job sites yet. Stand at the site and tap <b>📍 Add site here</b>.</div>`;
+  $('#gf-sum').textContent=`${GF.sites.length} site(s)${GF.dirty?' · unsaved changes':''}`;
+  $('#gf-save').classList.toggle('pulse',GF.dirty);
+  gfMap();
+}
+const fmtArea=r=>{const a=Math.PI*r*r;return a>=10000?(a/10000).toFixed(2)+' ha':Math.round(a).toLocaleString()+' m²'};
+function gfMap(fit){
+  if(!window.L)return;
+  if(!LM){LM=L.map('gf-map').setView(NASUGBU,14);tileLayer().addTo(LM);LML=L.layerGroup().addTo(LM);
+    LM.on('click',e=>{const s=GF.sites[GF.sel];if(!s)return toast('Add or select a site first');s.lat=+e.latlng.lat.toFixed(6);s.lng=+e.latlng.lng.toFixed(6);GF.dirty=true;gfRender()})}
+  LML.clearLayers();drawSites(LML,GF.sel,GF.sites);if(GF.me)meDot(LML,GF.me);
+  setTimeout(()=>{LM.invalidateSize();const s=GF.sites[GF.sel];if(fit&&s)LM.fitBounds(L.latLng(s.lat,s.lng).toBounds(s.radius*2.6))},60);
+}
+$('#gf-list').addEventListener('input',e=>{
+  const card=e.target.closest('[data-gi]'),f=e.target.dataset.f;if(!card||!f)return;const i=+card.dataset.gi,s=GF.sites[i];
+  if(f==='name')s.name=e.target.value;
+  if(f==='radius'){s.radius=+e.target.value;card.querySelector('.rlab').textContent=s.radius+' m';card.querySelector('.alab').textContent=fmtArea(s.radius)}
+  if(f==='lat'||f==='lng'){const v=parseFloat(e.target.value);if(!isNaN(v))s[f]=v}
+  GF.dirty=true;$('#gf-sum').textContent=`${GF.sites.length} site(s) · unsaved changes`;$('#gf-save').classList.add('pulse');
+  if(GF.sel!==i)GF.sel=i;gfMap(f!=='name');
+});
+$('#gf-list').addEventListener('click',e=>{
+  const d=e.target.closest('[data-gdel]');if(d){const i=+d.dataset.gdel;GF.sites.splice(i,1);GF.sel=Math.min(GF.sel,GF.sites.length-1);GF.dirty=true;gfRender();return}
+  const c=e.target.closest('[data-gi]');if(c&&+c.dataset.gi!==GF.sel){GF.sel=+c.dataset.gi;$$('#gf-list .site').forEach((x,i)=>x.classList.toggle('on',i===GF.sel));gfMap(true)}
+});
+$('#gf-mode').onchange=e=>{GF.mode=e.target.value;GF.dirty=true;gfRender()};
+$('#gf-here').onclick=async()=>{
+  const b=$('#gf-here');b.disabled=true;b.textContent='📍 Locating…';
+  try{const p=await getPos();GF.me=p;GF.sites.push({id:uid(),name:'Job site '+(GF.sites.length+1),lat:p.lat,lng:p.lng,radius:Math.max(50,Math.min(300,Math.ceil(p.acc/10)*10+50))});GF.sel=GF.sites.length-1;GF.dirty=true;gfRender();gfMap(true);toast(`Site added (GPS ±${p.acc} m) — rename & adjust radius`)}
+  catch(err){toast(err.message)}
+  b.disabled=false;b.textContent='📍 Add site here';
+};
+$('#gf-add').onclick=()=>{const c=LM?LM.getCenter():{lat:NASUGBU[0],lng:NASUGBU[1]};GF.sites.push({id:uid(),name:'Job site '+(GF.sites.length+1),lat:+c.lat.toFixed(6),lng:+c.lng.toFixed(6),radius:100});GF.sel=GF.sites.length-1;GF.dirty=true;gfRender();gfMap(true);toast('Tap the map to place it')};
+$('#gf-me').onclick=async()=>{try{GF.me=await getPos();gfRender();if(LM)LM.setView([GF.me.lat,GF.me.lng],17)}catch(err){toast(err.message)}};
+$('#gf-save').onclick=async()=>{
+  for(const s of GF.sites){if(!s.name.trim())return toast('Every site needs a name');if(isNaN(s.lat)||isNaN(s.lng)||Math.abs(s.lat)>90||Math.abs(s.lng)>180)return toast(`Invalid coordinates for ${s.name}`)}
+  if(GF.mode!=='off'&&!GF.sites.length)toast('Tip: add at least one job site for the fence to apply');
+  const d={...st.cfg,geo:GF.mode,sites:GF.sites.map(s=>({...s,name:s.name.trim()}))};
+  try{await S.setCfg(d);if(!DB)st.cfg={...DEFAULTS,...d};GF.dirty=false;gfRender();toast('Geofence saved');
+    logAct({action:'SETTINGS',detail:`Geofence ${GF.mode.toUpperCase()} · ${GF.sites.map(s=>`${s.name} ${s.radius}m`).join(', ')||'no sites'}`})}catch(e){toast('Save failed: '+e.message)}
+};
+
+/* ============ file download ============ */
+function saveFile(name,data){
+  const b=new Blob(['﻿'+data],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);toast('⬇ '+name);
+}
+
+/* ============ Supabase adapter (same API the app already uses) ============ */
+// tables: employees(id,data) · att(id,date,data) · logs(id,ts,rec_id,data) · config(id,data)
+const COLS={att:{date:'date'},logs:{ts:'ts',recId:'rec_id'},employees:{},config:{}};
+function sbShim(sb){
+  const META={fromCache:false,hasPendingWrites:false};
+  const snapDoc=(id,row)=>({id,exists:!!row,data:()=>row?row.data:undefined,metadata:META});
+  const snapQ=rows=>{const docs=rows.map(r=>snapDoc(r.id,r));return {docs,size:docs.length,empty:!docs.length,metadata:META,docChanges:()=>[]}};
+  const listeners={},chans={};
+  function watch(table,fn){
+    (listeners[table]=listeners[table]||new Set()).add(fn);
+    if(!chans[table]){
+      const ch=sb.channel('rt-'+table).on('postgres_changes',{event:'*',schema:'public',table},()=>{clearTimeout(ch._t);ch._t=setTimeout(()=>listeners[table].forEach(f=>f()),300)});
+      ch.subscribe();chans[table]=ch;
+    }
+    return ()=>listeners[table].delete(fn);
+  }
+  const notify=t=>(listeners[t]||[]).forEach(f=>f());
+  const extract=(t,d)=>{const o={};for(const [f,c] of Object.entries(COLS[t]||{}))o[c]=d[f]??null;return o};
+  const wrapErr=e=>({code:'unavailable',message:e?.message||String(e)});
+  function query(table,filters=[],lim=null){
+    const api={
+      where:(f,op,v)=>query(table,[...filters,[f,op,v]],lim),
+      orderBy:()=>api,
+      limit:n=>query(table,filters,n),
+      async get(){
+        let q=sb.from(table).select('id,data');
+        for(const [f,op,v] of filters){const c=(COLS[table]||{})[f];if(!c)throw new Error('Field not indexed: '+f);
+          q=op==='=='?q.eq(c,v):op==='>='?q.gte(c,v):op==='<='?q.lte(c,v):op==='>'?q.gt(c,v):op==='<'?q.lt(c,v):q}
+        q=q.limit(lim||10000);
+        const {data,error}=await q;if(error)throw error;return snapQ(data||[]);
+      },
+      onSnapshot(next,err){let alive=true;const run=()=>api.get().then(s=>alive&&next(s)).catch(e=>alive&&err&&err(wrapErr(e)));run();const un=watch(table,run);return()=>{alive=false;un()}},
+      doc:id=>docRef(table,id||uid()),
+      async add(d){const r=docRef(table,uid());await r.set(d);return r},
+    };
+    return api;
+  }
+  function docRef(table,id){
+    const ref={id,path:table+'/'+id,
+      async get(){const {data,error}=await sb.from(table).select('id,data').eq('id',id).maybeSingle();if(error)throw error;return snapDoc(id,data)},
+      async set(d){const {error}=await sb.from(table).upsert({id,data:d,...extract(table,d)});if(error)throw error;notify(table)},
+      async update(d){const cur=await ref.get();if(!cur.exists)throw {code:'invalid_argument',message:'missing'};await ref.set({...cur.data(),...d})},
+      async delete(){const {error}=await sb.from(table).delete().eq('id',id);if(error)throw error;notify(table)},
+      onSnapshot(next,err){let alive=true;const run=()=>ref.get().then(s=>alive&&next(s)).catch(e=>alive&&err&&err(wrapErr(e)));run();const un=watch(table,run);return()=>{alive=false;un()}},
+    };
+    return ref;
+  }
+  return {collection:n=>query(n),doc:p=>{const [t,i]=p.split('/');return docRef(t,i)}};
+}
+
+/* ============ offline-first data layer: local cache + outbox, syncs when online ============ */
+const KV=(()=>{
+  let dbp=null;
+  const open=()=>dbp||(dbp=new Promise((res,rej)=>{const r=indexedDB.open('kir-att',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const run=async(mode,fn)=>{const db=await open();return new Promise((res,rej)=>{const t=db.transaction('kv',mode),req=fn(t.objectStore('kv'));t.oncomplete=()=>res(req&&req.result);t.onerror=()=>rej(t.error)})};
+  return {
+    async get(k){try{return await run('readonly',s=>s.get(k))}catch(e){try{return JSON.parse(localStorage.getItem('kv:'+k))}catch(_){return null}}},
+    async set(k,v){try{await run('readwrite',s=>s.put(v,k))}catch(e){try{localStorage.setItem('kv:'+k,JSON.stringify(v))}catch(_){}}},
+  };
+})();
+
+function offlineDB(sb){
+  const TABLES=['employees','att','logs','config'];
+  const cache={};TABLES.forEach(t=>cache[t]=new Map());
+  let outbox=[],failed=[],lastSync=0,syncing=false;
+  const listeners={},chans={},META={fromCache:false,hasPendingWrites:false};
+  const colOf=(t,f)=>f==='__id'?'id':(COLS[t]||{})[f];
+  const colsOf=(t,d)=>{const o={};for(const [f,c] of Object.entries(COLS[t]||{}))o[c]=d[f]??null;return o};
+  const rowOf=(t,id,d)=>({id,data:d,...colsOf(t,d)});
+  const isNet=e=>!navigator.onLine||/fetch|network|timeout|load failed|offline|abort/i.test(String(e&&(e.message||e.details||e))||'');
+  const snapDoc=(id,r)=>({id,exists:!!r,data:()=>r?r.data:undefined,metadata:META});
+  const snapQ=rows=>{const docs=rows.map(r=>snapDoc(r.id,r));return {docs,size:docs.length,empty:!docs.length,metadata:META,docChanges:()=>[]}};
+  const match=(t,filters)=>r=>filters.every(([f,op,v])=>{const c=colOf(t,f),x=c?r[c]:r.data?.[f];
+    return op==='=='?String(x)===String(v):op==='>='?x>=v:op==='<='?x<=v:op==='>'?x>v:op==='<'?x<v:true});
+  const fromCache=(t,filters,lim)=>{let rows=[...cache[t].values()].filter(match(t,filters));if(lim)rows=rows.slice(0,lim);return rows};
+
+  function status(){window.dispatchEvent(new CustomEvent('kir-sync',{detail:info()}))}
+  function info(){return {pending:outbox.length,failed:failed.length,syncing,online:navigator.onLine,lastSync,cached:{att:cache.att.size,employees:cache.employees.size,logs:cache.logs.size}}}
+  let pT;function persist(){clearTimeout(pT);pT=setTimeout(async()=>{
+    const cut=addDays(dkey(),-90),lcut=Date.now()-30*864e5,pend=new Set(outbox.map(o=>o.table+'/'+o.id)),dump={};
+    for(const t of TABLES)dump[t]=[...cache[t].values()].filter(r=>pend.has(t+'/'+r.id)||(t==='att'?r.date>=cut:t==='logs'?r.ts>=lcut:true));
+    await KV.set('cache',dump);await KV.set('outbox',outbox);await KV.set('meta',{lastSync,failed});
+  },250)}
+  const saveQueueNow=()=>KV.set('outbox',outbox);
+  const ready=(async()=>{
+    const d=await KV.get('cache');if(d)for(const t of TABLES)(d[t]||[]).forEach(r=>cache[t].set(r.id,r));
+    outbox=(await KV.get('outbox'))||[];const m=await KV.get('meta');if(m){lastSync=m.lastSync||0;failed=m.failed||[]}
+    status();
+  })();
+
+  const notifyLocal=t=>(listeners[t]||[]).forEach(l=>l.local());
+  const notifyRemote=t=>(listeners[t]||[]).forEach(l=>l.remote());
+  function watch(t,l){
+    (listeners[t]=listeners[t]||new Set()).add(l);
+    if(!chans[t]){const ch=sb.channel('rt-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},()=>{clearTimeout(ch._t);ch._t=setTimeout(()=>notifyRemote(t),300)});ch.subscribe();chans[t]=ch}
+    return()=>listeners[t].delete(l);
+  }
+  async function fetchRemote(t,filters,lim){
+    let q=sb.from(t).select('id,data');
+    for(const [f,op,v] of filters){const c=colOf(t,f);if(!c)throw new Error('Field not indexed: '+f);
+      q=op==='=='?q.eq(c,v):op==='>='?q.gte(c,v):op==='<='?q.lte(c,v):op==='>'?q.gt(c,v):op==='<'?q.lt(c,v):q}
+    const {data,error}=await q.limit(lim||10000);if(error)throw error;
+    const pend=new Set(outbox.filter(o=>o.table===t).map(o=>o.id)),got=new Set(data.map(r=>r.id));
+    if(!lim)for(const r of [...cache[t].values()])if(match(t,filters)(r)&&!got.has(r.id)&&!pend.has(r.id))cache[t].delete(r.id);
+    data.forEach(r=>{if(!pend.has(r.id))cache[t].set(r.id,rowOf(t,r.id,r.data))});
+    persist();
+  }
+  async function read(t,filters,lim){
+    await ready;
+    if(navigator.onLine){try{await fetchRemote(t,filters,lim)}catch(e){if(!isNet(e))throw e}}
+    return fromCache(t,filters,lim);
+  }
+  function enqueue(op){
+    const i=op.table==='logs'?-1:outbox.findIndex(o=>o.table===op.table&&o.id===op.id);
+    if(i>=0)outbox[i]=op;else outbox.push(op);
+    saveQueueNow();persist();status();flush();
+  }
+  async function flush(){
+    await ready;
+    if(syncing||!navigator.onLine||!outbox.length){status();return}
+    syncing=true;status();const changed=new Set();
+    try{
+      while(outbox.length){
+        const o=outbox[0];let res;
+        try{res=o.op==='upsert'?await sb.from(o.table).upsert(o.row,o.table==='logs'?{onConflict:'id',ignoreDuplicates:true}:{onConflict:'id'})
+                              :await sb.from(o.table).delete().eq('id',o.id)}
+        catch(e){res={error:e}}
+        const err=res&&res.error;
+        if(err){
+          if(isNet(err))break;
+          if(/jwt|expired|401|refresh/i.test(err.message||'')&&!o._retried){o._retried=1;try{await sb.auth.refreshSession()}catch(_){}continue}
+          failed.push({...o,error:err.message||String(err),at:Date.now()});
+        }
+        outbox.shift();changed.add(o.table);saveQueueNow();
+      }
+      if(!outbox.length)lastSync=Date.now();
+    }finally{syncing=false;persist();status();changed.forEach(notifyRemote)}
+  }
+  window.addEventListener('online',()=>{status();flush().then(()=>TABLES.forEach(notifyRemote))});
+  window.addEventListener('offline',status);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&outbox.length)flush()});
+  setInterval(()=>{if(outbox.length)flush()},20000);
+
+  function query(t,filters=[],lim=null){
+    const api={
+      where:(f,op,v)=>query(t,[...filters,[f,op,v]],lim),
+      orderBy:()=>api,
+      limit:n=>query(t,filters,n),
+      async get(){return snapQ(await read(t,filters,lim))},
+      onSnapshot(next,err){
+        let alive=true;
+        const l={local:()=>alive&&next(snapQ(fromCache(t,filters,lim))),
+                 remote:()=>read(t,filters,lim).then(r=>alive&&next(snapQ(r))).catch(e=>alive&&err&&err({code:'unavailable',message:e.message}))};
+        ready.then(()=>{if(alive&&cache[t].size)l.local();l.remote()});
+        const un=watch(t,l);return()=>{alive=false;un()};
+      },
+      doc:id=>docRef(t,id||uid()),
+      async add(d){const r=docRef(t,uid());await r.set(d);return r},
+    };
+    return api;
+  }
+  function docRef(t,id){
+    const F=[['__id','==',id]];
+    const ref={id,path:t+'/'+id,
+      async get(){const r=await read(t,F);return snapDoc(id,r[0])},
+      async set(d){await ready;const row=rowOf(t,id,d);cache[t].set(id,row);notifyLocal(t);enqueue({op:'upsert',table:t,id,row,at:Date.now()})},
+      async update(d){const cur=cache[t].get(id);if(!cur)throw {code:'invalid_argument',message:'missing'};await ref.set({...cur.data,...d})},
+      async delete(){await ready;cache[t].delete(id);notifyLocal(t);enqueue({op:'delete',table:t,id,at:Date.now()})},
+      onSnapshot(next,err){
+        let alive=true;
+        const l={local:()=>alive&&next(snapDoc(id,cache[t].get(id))),remote:()=>read(t,F).then(r=>alive&&next(snapDoc(id,r[0]))).catch(e=>alive&&err&&err({code:'unavailable',message:e.message}))};
+        ready.then(()=>{if(alive&&cache[t].has(id))l.local();l.remote()});
+        const un=watch(t,l);return()=>{alive=false;un()};
+      },
+    };
+    return ref;
+  }
+  return {
+    collection:n=>query(n),doc:p=>{const [t,i]=p.split('/');return docRef(t,i)},
+    syncNow:flush,info,
+    pendingList:()=>outbox.map(o=>({table:o.table,id:o.id,op:o.op,at:o.at,data:o.row&&o.row.data})),
+    failedList:()=>failed,
+    retryFailed(){outbox.push(...failed.map(({error,at,_retried,...o})=>o));failed=[];saveQueueNow();persist();flush()},
+    clearFailed(){failed=[];persist();status()},
+    async prefetch(){await Promise.all([read('employees',[]),read('config',[]),read('att',[['date','>=',addDays(dkey(),-60)]]),read('logs',[['ts','>=',Date.now()-14*864e5]])]);lastSync=Date.now();persist();status()},
+  };
+}
+
+/* ============ sync status UI ============ */
+const ago=ts=>{if(!ts)return 'never';const s=(Date.now()-ts)/1000;return s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':new Date(ts).toLocaleDateString('en-PH',{timeZone:TZ,month:'short',day:'numeric'})};
+let SYNC={pending:0,failed:0,syncing:false,online:navigator.onLine,lastSync:0,cached:{}};
+function renderSync(){
+  const c=$('#sync-chip'),s=SYNC;if(!c)return;
+  if(!DB||!DB.syncNow){c.className='schip hidden';return}
+  let cls='ok',txt='☁️ Synced';
+  if(!s.online){cls='off';txt=s.pending?`📴 Offline · ${s.pending} to sync`:'📴 Offline'}
+  else if(s.syncing){cls='busy';txt=`🔄 Syncing ${s.pending}…`}
+  else if(s.failed){cls='bad';txt=`⚠️ ${s.failed} failed`}
+  else if(s.pending){cls='busy';txt=`⏳ ${s.pending} pending`}
+  c.className='schip '+cls;c.textContent=txt;
+  const b=$('#sy-box');if(!b)return;
+  b.innerHTML=`<div class="grid g2" style="gap:8px">
+    ${statTile(s.online?'Online':'Offline','Connection',s.online?'var(--in)':'var(--abs)',null)}
+    ${statTile(s.pending,'Waiting to upload',s.pending?'var(--late)':'var(--in)',null)}
+    ${statTile(s.cached?.att??0,'Records on device','var(--brand)',null)}
+    ${statTile(ago(s.lastSync),'Last synced','var(--out)',null)}</div>
+    ${s.failed?`<div class="geo bad">⚠️ ${s.failed} change(s) were rejected by the server.<br><small>${esc((DB.failedList()[0]||{}).error||'')}</small><div class="flex" style="margin-top:6px"><button class="btn sm sec" id="sy-retry">Retry</button><button class="btn sm sec" id="sy-clear">Dismiss</button></div></div>`:''}
+    ${s.pending?`<div style="font-size:11px;color:var(--mute);margin-top:8px">${DB.pendingList().slice(0,6).map(p=>`• ${p.op==='delete'?'Delete':'Save'} ${p.table==='att'?'attendance':p.table==='logs'?'log':p.table} ${esc(p.data?.name||p.data?.empName||p.data?.action||p.id)} · ${ago(p.at)}`).join('<br>')}${s.pending>6?`<br>…and ${s.pending-6} more`:''}</div>`:''}`;
+}
+window.addEventListener('kir-sync',e=>{SYNC=e.detail;renderSync()});
+window.addEventListener('online',()=>toast('🌐 Back online — syncing…'));
+window.addEventListener('offline',()=>toast('📴 Offline — punches are saved on this device'));
+document.addEventListener('click',async e=>{
+  if(e.target.id==='sync-chip'||e.target.id==='sy-now'){if(!navigator.onLine)return toast('Offline — will upload automatically when internet returns');await DB.syncNow();toast(SYNC.pending?`${SYNC.pending} still pending`:'✅ All data synced')}
+  if(e.target.id==='sy-pre'){if(!navigator.onLine)return toast('Need internet to download');const b=e.target;b.disabled=true;b.textContent='Downloading…';try{await DB.prefetch();toast('✅ Last 60 days saved for offline use')}catch(err){toast('Download failed: '+err.message)}b.disabled=false;b.textContent='⬇ Save data for offline'}
+  if(e.target.id==='sy-retry')DB.retryFailed();
+  if(e.target.id==='sy-clear')DB.clearFailed();
+});
+
+/* ============ boot: config → login → app ============ */
+let SB=null;
+function gate(mode,msg){
+  $('#gate').classList.toggle('hidden',mode==='off');
+  $('#g-login').classList.toggle('hidden',mode!=='login');$('#g-setup').classList.toggle('hidden',mode!=='setup');
+  $('#g-sub').textContent=msg||'';
+}
+function startApp(user){
+  gate('off');
+  if(user){if(!ME)setMe((user.email||'').split('@')[0]);$('#c-acct').textContent='Signed in as '+user.email}
+  else{$('#c-acct').textContent='Demo mode — data stays on this device';$('#c-signout').textContent='Exit demo mode'}
+  subEmployees();subDay(dkey());renderSync();
+}
+$('#g-login').onsubmit=async e=>{
+  e.preventDefault();const b=$('#g-btn');b.disabled=true;b.textContent='Signing in…';
+  const {data,error}=await SB.auth.signInWithPassword({email:$('#g-email').value.trim(),password:$('#g-pass').value});
+  b.disabled=false;b.textContent='Sign in';
+  if(error){toast(error.message);return}
+  DB=offlineDB(SB);startApp(data.user);
+};
+$('#g-setup').onsubmit=e=>{e.preventDefault();try{localStorage.setItem('kir_sb_url',$('#g-url').value.trim());localStorage.setItem('kir_sb_key',$('#g-key').value.trim());localStorage.removeItem('kir_demo')}catch(_){}location.reload()};
+$('#g-demo').onclick=()=>{try{localStorage.setItem('kir_demo','1')}catch(_){}DB=null;banner('Demo mode: data is saved on this device only.');startApp(null)};
+$('#c-signout').onclick=async()=>{try{localStorage.removeItem('kir_demo')}catch(_){}if(SB)await SB.auth.signOut();location.reload()};
+(async()=>{
+  const C=window.KIR_CONFIG||{};let url=C.SUPABASE_URL,key=C.SUPABASE_ANON_KEY,demo=null;
+  try{url=url||localStorage.getItem('kir_sb_url');key=key||localStorage.getItem('kir_sb_key');demo=localStorage.getItem('kir_demo')}catch(_){}
+  if(demo){banner('Demo mode: data is saved on this device only.');startApp(null);return}
+  if(!url||!key||!window.supabase){gate('setup','Connect your database');return}
+  try{SB=window.supabase.createClient(url,key)}catch(e){gate('setup','Invalid Supabase URL / key');return}
+  let user=null;
+  try{const {data}=await SB.auth.getSession();user=data?.session?.user||null}catch(_){}
+  if(!user&&!navigator.onLine){try{const k=Object.keys(localStorage).find(k=>/^sb-.*-auth-token$/.test(k));if(k){const s=JSON.parse(localStorage.getItem(k));user=s?.user||s?.currentSession?.user||null}}catch(_){}}
+  if(!user){gate('login',navigator.onLine?'Sign in to continue':'No internet — connect once to sign in on this device');return}
+  DB=offlineDB(SB);startApp(user);
+})();
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
