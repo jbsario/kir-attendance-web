@@ -9,7 +9,7 @@ Static site (no build step) · Supabase (Postgres + Auth + Realtime) · deploy o
 ### 1. Supabase
 1. Create a project at https://supabase.com (region: Singapore).
 2. **SQL Editor → New query** → paste `supabase/schema.sql` → **Run**.
-3. **Authentication → Users → Add user** → create one login per device/person (e.g. `kiosk@kir.ph`, your own email). Tick *Auto confirm*.
+3. **Authentication → Users → Add user** → create one login per device/person. The app signs in with a **username** (no email typed): user `admin` = Supabase email `admin@kir.ph`, user `kiosk` = `kiosk@kir.ph`. Tick *Auto confirm* (nothing is ever emailed).
 4. **Authentication → Sign In / Providers** → turn **off** "Allow new users to sign up" so only accounts you create can log in.
 5. **Project Settings → API** → copy the **Project URL** and **anon public** key.
 
@@ -31,7 +31,7 @@ window.KIR_CONFIG = {
 Every push to `main` redeploys automatically.
 
 ## Using it
-- **Kiosk phone/tablet:** open the site, sign in once with the kiosk account, *Add to Home Screen*. Stays signed in.
+- **Kiosk phone/tablet:** open the site, sign in once with username `kiosk`, *Add to Home Screen*. Stays signed in.
 - **Admin PIN** (default `1234`) unlocks Week, Payroll, Logs, Settings. Change it in Settings.
 - Demo mode (no database) is available on the connect screen for testing.
 

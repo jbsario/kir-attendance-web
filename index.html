@@ -167,10 +167,10 @@ nav button{font-size:10px}
   <div class="card" style="width:100%;max-width:380px;padding:22px">
     <div style="text-align:center;margin-bottom:14px"><img src="icon.svg" width="56" height="56" alt="" style="border-radius:14px"><h1 style="font-size:20px;font-weight:800;margin-top:8px">KIR <span style="color:var(--brand)">Attendance</span></h1><div id="g-sub" style="font-size:12px;color:var(--mute);margin-top:2px">Loading…</div></div>
     <form id="g-login" class="hidden">
-      <label>Email</label><input id="g-email" type="email" autocomplete="username" required>
+      <label>Username</label><input id="g-email" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. admin or kiosk" required>
       <label>Password</label><input id="g-pass" type="password" autocomplete="current-password" required>
       <button class="btn block" style="margin-top:16px" id="g-btn">Sign in</button>
-      <div style="font-size:11px;color:var(--mute);margin-top:10px;text-align:center">Accounts are created by the owner in Supabase → Authentication.</div>
+      <div style="font-size:11px;color:var(--mute);margin-top:10px;text-align:center">Ask the owner for your username and password.</div>
     </form>
     <button type="button" class="btn block hidden" id="g-reload" onclick="location.reload()">Reload</button>
     <form id="g-setup" class="hidden">
@@ -1524,6 +1524,10 @@ document.addEventListener('click',async e=>{
 
 /* ============ boot: config → login → app ============ */
 let SB=null;
+// Username login: "admin" signs in as the Supabase user admin@kir.ph (no email typed or shown).
+const LOGIN_DOMAIN='kir.ph';
+const loginEmail=v=>{v=v.trim().toLowerCase();return v.includes('@')?v:v.replace(/\s+/g,'')+'@'+LOGIN_DOMAIN};
+const userName=e=>(e||'').replace('@'+LOGIN_DOMAIN,'');
 function gate(mode,msg){
   $('#gate').classList.toggle('hidden',mode==='off');
   $('#g-login').classList.toggle('hidden',mode!=='login');$('#g-setup').classList.toggle('hidden',mode!=='setup');$('#g-reload').classList.toggle('hidden',mode!=='error');
@@ -1531,13 +1535,13 @@ function gate(mode,msg){
 }
 function startApp(user){
   gate('off');
-  if(user){if(!ME)setMe((user.email||'').split('@')[0]);$('#c-acct').textContent='Signed in as '+user.email}
+  if(user){if(!ME)setMe((user.email||'').split('@')[0]);$('#c-acct').textContent='Signed in as '+userName(user.email)}
   else{$('#c-acct').textContent='Demo mode — data stays on this device';$('#c-signout').textContent='Exit demo mode'}
   subEmployees();subDay(dkey());renderSync();
 }
 $('#g-login').onsubmit=async e=>{
   e.preventDefault();const b=$('#g-btn');b.disabled=true;b.textContent='Signing in…';
-  const {data,error}=await SB.auth.signInWithPassword({email:$('#g-email').value.trim(),password:$('#g-pass').value});
+  const {data,error}=await SB.auth.signInWithPassword({email:loginEmail($('#g-email').value),password:$('#g-pass').value});
   b.disabled=false;b.textContent='Sign in';
   if(error){toast(error.message);return}
   DB=offlineDB(SB);startApp(data.user);
