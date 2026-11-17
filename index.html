@@ -172,6 +172,7 @@ nav button{font-size:10px}
       <button class="btn block" style="margin-top:16px" id="g-btn">Sign in</button>
       <div style="font-size:11px;color:var(--mute);margin-top:10px;text-align:center">Accounts are created by the owner in Supabase → Authentication.</div>
     </form>
+    <button type="button" class="btn block hidden" id="g-reload" onclick="location.reload()">Reload</button>
     <form id="g-setup" class="hidden">
       <div style="font-size:12px;color:var(--mute);line-height:1.5">Connect your Supabase project (Settings → API). Saved on this device only — or put them in <b>config.js</b> for all devices.</div>
       <label>Project URL</label><input id="g-url" placeholder="https://xxxx.supabase.co" required>
@@ -958,7 +959,7 @@ async function quickPunch(id){
   try{
     let geo=null;
     if(geoOn()){
-      try{const pos=await getPos(60000);const n=hasSites()?nearestSite(pos):null;geo={...pos,...(n||{}),inside:n?n.dist<=n.radius:null}}
+      try{const pos=await getPos(st.cfg.geo==='block'?10000:60000);const n=hasSites()?nearestSite(pos):null;geo={...pos,...(n||{}),inside:n?n.dist<=n.radius:null}}
       catch(err){if(st.cfg.geo==='block'&&hasSites())return toast('📍 '+err.message)}
       if(st.cfg.geo==='block'&&hasSites()&&geo&&!geo.inside)return toast(`🚩 Outside ${geo.site} (${fmtDist(geo.dist)}) — blocked`);
     }
@@ -1370,7 +1371,7 @@ function offlineDB(sb){
   const snapQ=rows=>{const docs=rows.map(r=>snapDoc(r.id,r));return {docs,size:docs.length,empty:!docs.length,metadata:META,docChanges:()=>[]}};
   const match=(t,filters)=>r=>filters.every(([f,op,v])=>{const c=colOf(t,f),x=c?r[c]:r.data?.[f];
     return op==='=='?String(x)===String(v):op==='>='?x>=v:op==='<='?x<=v:op==='>'?x>v:op==='<'?x<v:true});
-  const fromCache=(t,filters,lim)=>{let rows=[...cache[t].values()].filter(match(t,filters));if(lim)rows=rows.slice(0,lim);return rows};
+  const fromCache=(t,filters,lim)=>{let rows=[...cache[t].values()].filter(match(t,filters));if(t==='logs')rows.sort((a,b)=>(b.ts||0)-(a.ts||0));if(lim)rows=rows.slice(0,lim);return rows};
 
   function status(){window.dispatchEvent(new CustomEvent('kir-sync',{detail:info()}))}
   function info(){return {pending:outbox.length,failed:failed.length,syncing,online:navigator.onLine,lastSync,cached:{att:cache.att.size,employees:cache.employees.size,logs:cache.logs.size}}}
@@ -1393,11 +1394,17 @@ function offlineDB(sb){
     if(!chans[t]){const ch=sb.channel('rt-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},()=>{clearTimeout(ch._t);ch._t=setTimeout(()=>notifyRemote(t),300)});ch.subscribe();chans[t]=ch}
     return()=>listeners[t].delete(l);
   }
+  // Supabase returns at most 1000 rows per request, so page through results (newest logs first when limited).
   async function fetchRemote(t,filters,lim){
-    let q=sb.from(t).select('id,data');
-    for(const [f,op,v] of filters){const c=colOf(t,f);if(!c)throw new Error('Field not indexed: '+f);
-      q=op==='=='?q.eq(c,v):op==='>='?q.gte(c,v):op==='<='?q.lte(c,v):op==='>'?q.gt(c,v):op==='<'?q.lt(c,v):q}
-    const {data,error}=await q.limit(lim||10000);if(error)throw error;
+    const PAGE=1000,max=lim||1e6,data=[];
+    for(let from=0;from<max;from+=PAGE){
+      let q=sb.from(t).select('id,data');
+      for(const [f,op,v] of filters){const c=colOf(t,f);if(!c)throw new Error('Field not indexed: '+f);
+        q=op==='=='?q.eq(c,v):op==='>='?q.gte(c,v):op==='<='?q.lte(c,v):op==='>'?q.gt(c,v):op==='<'?q.lt(c,v):q}
+      q=t==='logs'?q.order('ts',{ascending:false}).order('id'):q.order('id');
+      const n=Math.min(PAGE,max-from),{data:d,error}=await q.range(from,from+n-1);if(error)throw error;
+      data.push(...d);if(d.length<n)break;
+    }
     const pend=new Set(outbox.filter(o=>o.table===t).map(o=>o.id)),got=new Set(data.map(r=>r.id));
     if(!lim)for(const r of [...cache[t].values()])if(match(t,filters)(r)&&!got.has(r.id)&&!pend.has(r.id))cache[t].delete(r.id);
     data.forEach(r=>{if(!pend.has(r.id))cache[t].set(r.id,rowOf(t,r.id,r.data))});
@@ -1519,7 +1526,7 @@ document.addEventListener('click',async e=>{
 let SB=null;
 function gate(mode,msg){
   $('#gate').classList.toggle('hidden',mode==='off');
-  $('#g-login').classList.toggle('hidden',mode!=='login');$('#g-setup').classList.toggle('hidden',mode!=='setup');
+  $('#g-login').classList.toggle('hidden',mode!=='login');$('#g-setup').classList.toggle('hidden',mode!=='setup');$('#g-reload').classList.toggle('hidden',mode!=='error');
   $('#g-sub').textContent=msg||'';
 }
 function startApp(user){
@@ -1542,7 +1549,8 @@ $('#c-signout').onclick=async()=>{try{localStorage.removeItem('kir_demo')}catch(
   const C=window.KIR_CONFIG||{};let url=C.SUPABASE_URL,key=C.SUPABASE_ANON_KEY,demo=null;
   try{url=url||localStorage.getItem('kir_sb_url');key=key||localStorage.getItem('kir_sb_key');demo=localStorage.getItem('kir_demo')}catch(_){}
   if(demo){banner('Demo mode: data is saved on this device only.');startApp(null);return}
-  if(!url||!key||!window.supabase){gate('setup','Connect your database');return}
+  if(url&&key&&!window.supabase){gate('error',navigator.onLine?'Could not load the database library. Check your internet, then reload.':'No internet. Connect once to load the app on this device.');return}
+  if(!url||!key){gate('setup','Connect your database');return}
   try{SB=window.supabase.createClient(url,key)}catch(e){gate('setup','Invalid Supabase URL / key');return}
   let user=null;
   try{const {data}=await SB.auth.getSession();user=data?.session?.user||null}catch(_){}
